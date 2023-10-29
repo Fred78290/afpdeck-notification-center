@@ -1,0 +1,149 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  afpdeck-notification-center
+
+  Lambda for afpdeck-notification-center
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 15
+
+Parameters:
+  LambdaArch:
+    Type: String
+    Default: arm64
+  ApiDomainName:
+    Type: String
+    Default: afpdeck-notification-center.aldunelabs.fr
+  PublicApiStageName:
+    Type: String
+    Default: api
+  PublicApiGatewayName:
+    Type: String
+    Default: afpdeck-notification-center
+  PublicApiKey:
+    Type: String
+    Default: 0C0D8D6B-CEAC-42E7-AA28-A1A31129D392
+  ACMCertificatARN:
+    Type: String
+    Default: '${ACM_CERTIFICATE_ARN}'
+  Route53ZoneID:
+    Type: String
+    Default: '${ROUTE53_ZONEID}'
+
+Resources:
+  AfpDeckNotificationCenterDomainName:
+    Type: 'AWS::ApiGateway::DomainName'
+    Properties:
+      RegionalCertificateArn: !Ref ACMCertificatARN
+      DomainName: !Ref ApiDomainName
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  AfpDeckNotificationCenterRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId: !Ref Route53ZoneID
+      RecordSets:
+        - Name: !Ref ApiDomainName
+          Type: A
+          AliasTarget:
+            HostedZoneId: !GetAtt AfpDeckNotificationCenterDomainName.RegionalHostedZoneId
+            DNSName: !GetAtt AfpDeckNotificationCenterDomainName.RegionalDomainName
+
+  AfpDeckNotificationCenterApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Ref PublicApiGatewayName
+      Description: public rest api afpdeck notification center
+      EndpointConfiguration:
+        Type: REGIONAL
+      OpenApiVersion: 3.0.1
+      StageName: !Ref PublicApiStageName
+      TracingEnabled: True
+      BinaryMediaTypes:
+        - "*~1*"
+      ApiKeySourceType: HEADER
+      Auth:
+        ApiKeyRequired: true
+        UsagePlan:
+          CreateUsagePlan: PER_API
+          UsagePlanName: !Ref PublicApiGatewayName
+
+  AfpDeckNotificationCenterFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: lambda/
+      Handler: app.lambdaHandler
+      Runtime: nodejs18.x
+      Architectures:
+        - !Ref LambdaArch
+      Events:
+        Root:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /
+            Method: ANY
+            RestApiId: !Ref AfpDeckNotificationCenterApi
+            Auth:
+              ApiKeyRequired: true
+        Proxy:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AfpDeckNotificationCenterApi
+            Path: /{proxy+}
+            Method: ANY
+            Auth:
+              ApiKeyRequired: true
+    Metadata: # Manage esbuild properties
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        EntryPoints:
+        - app.ts
+
+  ApplicationResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Name:
+        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
+      ResourceQuery:
+        Type: CLOUDFORMATION_STACK_1_0
+
+  ApplicationInsightsMonitoring:
+    Type: AWS::ApplicationInsights::Application
+    Properties:
+      ResourceGroupName:
+        Ref: ApplicationResourceGroup
+      AutoConfigurationEnabled: 'true'
+
+  AfpDeckNotificationCenterApiBasePathMapping:
+    DependsOn: AfpDeckNotificationCenterDomainName
+    Type: AWS::ApiGateway::BasePathMapping
+    Properties:
+      BasePath: !Ref PublicApiStageName
+      DomainName: !Ref ApiDomainName
+      RestApiId: !Ref AfpDeckNotificationCenterApi
+      Stage: !Ref AfpDeckNotificationCenterApiStage
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  AfpDeckNotificationCenterApi:
+    Description: API Gateway endpoint URL for Prod stage for Afpdeck Notification Center function
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${AfpDeckNotificationCenterApiStage}/hello/"
+  AfpDeckNotificationCenterFunction:
+    Description: Afpdeck Notification Center Lambda Function ARN
+    Value: !GetAtt AfpDeckNotificationCenterFunction.Arn
+  AfpDeckNotificationCenterFunctionIamRole:
+    Description: Implicit IAM Role created for Afpdeck Notification Center function
+    Value: !GetAtt AfpDeckNotificationCenterFunctionRole.Arn
+  AfpDeckNotificationCenterApiApiKey:
+    Description: "You can find your API Key in the AWS console: (Put in the request HEADER as 'x-api-key')"
+    Value: !Sub "https://console.aws.amazon.com/apigateway/home?region=${AWS::Region}#/api-keys/${AfpDeckNotificationCenterApiApiKey}"
