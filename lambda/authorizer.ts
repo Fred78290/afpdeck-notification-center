@@ -39,7 +39,7 @@ export const authHandler = async (
                 {
                     Action: 'execute-api:Invoke',
                     Effect: 'Deny',
-                    Resource: event.resource,
+                    Resource: event.methodArn,
                 },
             ],
         },
