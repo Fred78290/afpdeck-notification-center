@@ -208,3 +208,5 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/osx,node,linux,windows,sam
 
 template.yaml.out
+
+package-lock.json
