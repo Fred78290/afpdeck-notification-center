@@ -1,0 +1,81 @@
+# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
+
+name: Deplou
+
+on:
+  push:
+    tags:
+	  - ci-test
+      - v*
+    branches: [ master ]
+#  pull_request:
+#    types: [opened, synchronize, reopened]
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+  DOMAIN_NAME: ${{ secrets.DOMAIN_NAME }}
+  GIT_ACTOR: ${{ github.actor }}
+  GITHUB_TOKEN: ${{ github.token }}
+  REPOSITORY_NAME: ${{ github.event.repository.name }}
+
+permissions:
+    id-token: write # This is required for requesting the JWT
+    contents: read  # This is required for actions/checkout
+
+jobs:
+  build:
+
+    runs-on: ubuntu
+    timeout-minutes: 60
+
+    steps:
+    - name: Check environment
+      shell: bash
+      run: |
+        [ -z "${AWS_ROLE_TO_ASSUME}" ] && (echo "AWS_ROLE_TO_ASSUME is missing" ; exit 1)
+        [ -z "${AWS_REGION}" ] && (echo "AWS_REGION is missing" ; exit 1)
+        [ -z "${AWS_BUCKETNAME}" ] && (echo "AWS_BUCKETNAME is missing" ; exit 1)
+        [ -z "${DOMAIN_NAME}" ] && (echo "DOMAIN_NAME is missing" ; exit 1)
+        echo "Every thing OK"
+        exit
+
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Setup Node
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18.x
+
+    - name: Setup SAM
+      uses: aws-actions/setup-sam@v2
+      with:
+        use-installer: true
+
+    - name: Install AWS cli
+      shell: bash
+      run: |
+        if [ $(uname -p) == "arm" ] || [ $(uname -p) == "aarch64" ]; then
+          ARCH=arm64
+        else
+          ARCH=amd64
+        fi
+
+        curl -L -o install-aws.sh https://raw.githubusercontent.com/unfor19/install-aws-cli-action/master/entrypoint.sh && \
+        chmod +x install-aws.sh
+        sudo --preserve-env ./install-aws.sh "v2" "${ARCH}"
+        rm install-aws.sh          
+
+    - name: Setup AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+        role-session-name: backend-role-github-actions
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Deploy
+      shell: bash
+      run: |
+        ./deploy.sh

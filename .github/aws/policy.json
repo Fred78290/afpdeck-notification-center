@@ -1,0 +1,104 @@
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Effect": "Allow",
+			"Resource": "arn:aws:apigateway:*::/*",
+			"Action": [
+				"apigateway:*"
+			]
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"iam:GetRole",
+				"iam:PassRole"
+			],
+			"Resource": "arn:aws:iam::390689217862:oidc-provider/token.actions.githubusercontent.com"
+		},
+		{
+			"Effect": "Allow",
+			"Resource": "arn:aws:logs:*:*:log-group:/aws/lambda/*",
+			"Action": [
+				"logs:DescribeLogStreams",
+				"logs:GetLogEvents",
+				"logs:FilterLogEvents"
+			]
+		},
+		{
+			"Effect": "Allow",
+			"Resource": "*",
+			"Action": [
+				"acm:DescribeCertificate",
+				"acm:GetAccountConfiguration",
+				"acm:GetCertificate",
+				"acm:ListCertificates",
+				"acm:ListTagsForCertificate",
+				"cloudformation:*",
+				"cognito-identity:Describe*",
+				"cognito-identity:Get*",
+				"cognito-identity:List*",
+				"cognito-idp:AdminGet*",
+				"cognito-idp:AdminList*",
+				"cognito-idp:Describe*",
+				"cognito-idp:Get*",
+				"cognito-idp:List*",
+				"cognito-sync:Describe*",
+				"cognito-sync:Get*",
+				"cognito-sync:List*",
+				"ec2:Describe*",
+				"iam:AddRoleToInstanceProfile",
+				"iam:AttachRolePolicy",
+				"iam:CreateInstanceProfile",
+				"iam:CreatePolicy",
+				"iam:CreateRole",
+				"iam:DeleteInstanceProfile",
+				"iam:DeletePolicy",
+				"iam:DeleteRole",
+				"iam:DeleteRolePolicy",
+				"iam:DetachRolePolicy",
+				"iam:GenerateCredentialReport",
+				"iam:GenerateServiceLastAccessedDetails",
+				"iam:Get*",
+				"iam:List*",
+				"iam:PutRolePolicy",
+				"iam:PutUserPolicy",
+				"iam:RemoveRoleFromInstanceProfile",
+				"iam:SimulateCustomPolicy",
+				"iam:SimulatePrincipalPolicy",
+				"iam:TagInstanceProfile",
+				"iam:TagMFADevice",
+				"iam:TagOpenIDConnectProvider",
+				"iam:TagPolicy",
+				"iam:TagRole",
+				"iam:TagSAMLProvider",
+				"iam:TagServerCertificate",
+				"iam:TagUser",
+				"iam:UntagInstanceProfile",
+				"iam:UntagMFADevice",
+				"iam:UntagOpenIDConnectProvider",
+				"iam:UntagPolicy",
+				"iam:UntagRole",
+				"iam:UntagSAMLProvider",
+				"iam:UntagServerCertificate",
+				"iam:UntagUser",
+				"iam:UpdateRole",
+				"kms:ListAliases",
+				"lambda:*",
+				"logs:DescribeLogGroups",
+				"route53:Get*",
+				"route53:List*",
+				"route53:ChangeResourceRecordSets",
+				"route53:TestDNSAnswer",
+				"s3-object-lambda:*",
+				"s3:*",
+				"sns:ListPlatformApplications",
+				"states:DescribeStateMachine",
+				"states:ListStateMachines",
+				"tag:GetResources",
+				"xray:BatchGetTraces",
+				"xray:GetTraceSummaries"
+			]
+		}
+	]
+}
