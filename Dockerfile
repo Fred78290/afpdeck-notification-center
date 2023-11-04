@@ -14,6 +14,7 @@ ENV DEBUG_LAMBDA=true
 WORKDIR /usr/src/app
 
 COPY dist/* ./
+COPY package.json ./
 
 # to avoid security exception 
 RUN npm i npm@latest -g

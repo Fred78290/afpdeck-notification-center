@@ -10,7 +10,7 @@
 		"dev": "nodemon --watch lambda -r dotenv/config -e js,ts,json --exec \"ts-node server.ts\"",
 		"build": "tsup server.ts --format cjs --clean",
 		"docker": "./docker.sh",
-		"start": "node dist/server.js"
+		"start": "node server.js"
 	},
 	"dependencies": {
 		"afp-apicore-sdk": "^1.1.5",
