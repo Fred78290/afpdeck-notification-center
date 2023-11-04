@@ -95,6 +95,7 @@ typings/
 .env
 .env.test
 .env*.local
+.password
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -210,3 +211,4 @@ $RECYCLE.BIN/
 template.yaml.out
 
 package-lock.json
+nodemon.json
