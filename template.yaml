@@ -32,18 +32,64 @@ Parameters:
   CodeLocation:
     Type: String
     Default: lambda/
-  AuthUserName:
+  ApiCoreClientID:
     Type: String
     Default: afpdeck
-  AuthPassword:
+  ApiCoreClientSecret:
     Type: String
     Default: AAD18D12-CAF1-4DFB-90A1-49C6CB2FB82C
+  ApiCoreBaseURL:
+    Type: String
+    Default: AAD18D12-CAF1-4DFB-90A1-49C6CB2FB82C
+  DebugLambda:
+    Type: String
+    Default: 'false'
 Resources:
+#  AfpDeckNotificationCenterLambdaPermission:
+#    Type: "AWS::Lambda::Permission"
+#    DependsOn:
+#    - AfpDeckNotificationCenterApi
+#    - AfpDeckNotificationCenterFunction
+#    Properties:
+#      Action: lambda:InvokeFunction
+#      FunctionName: !Ref AfpDeckNotificationCenterFunction
+#      Principal: apigateway.amazonaws.com
+#      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AfpDeckNotificationCenterApi}/*/*/*"
+
+  AfpDeckNotificationCenterApiAuthPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+    - AfpDeckNotificationCenterApi
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref AfpDeckNotificationCenterAuthFunction
+      Principal: !GetAtt AfpDeckNotificationCenterAuthorizerRole.Arn
+
+  AfpDeckNotificationCenterAuthorizerRole:
+      Type: AWS::IAM::Role
+      Properties: 
+        RoleName: AfpDeckNotificationCenterAuthorizer
+        Description: authorizer role
+        AssumeRolePolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - "apigateway.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+        ManagedPolicyArns: 
+          - arn:aws:iam::aws:policy/AmazonAPIGatewayInvokeFullAccess
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
   AfpDeckNotificationCenterDomainName:
-    Type: 'AWS::ApiGateway::DomainName'
+    Type: AWS::ApiGateway::DomainName
     Properties:
       RegionalCertificateArn: !Ref ACMCertificatARN
       DomainName: !Ref ApiDomainName
+      SecurityPolicy: TLS_1_2
       EndpointConfiguration:
         Types:
           - REGIONAL
@@ -68,37 +114,61 @@ Resources:
         Type: REGIONAL
       OpenApiVersion: 3.0.1
       StageName: !Ref PublicApiStageName
-      TracingEnabled: True
+      TracingEnabled: False
       BinaryMediaTypes:
         - "*~1*"
-      ApiKeySourceType: HEADER
+      AccessLogSetting:
+        DestinationArn: !GetAtt AfpDeckNotificationCenterApiLogGroup.Arn
+        Format: $context.extendedRequestId $context.identity.sourceIp $context.identity.caller $context.identity.user [$context.requestTime] "$context.httpMethod $context.resourcePath $context.protocol" $context.status $context.responseLength $context.requestId
       Auth:
+        InvokeRole: !GetAtt AfpDeckNotificationCenterAuthorizerRole.Arn
         DefaultAuthorizer: AfpDeckNotificationCenterApiAuthorizer
         Authorizers:
           AfpDeckNotificationCenterApiAuthorizer:
+            DisableFunctionDefaultPermissions: False
+            FunctionPayloadType: REQUEST
             FunctionArn: !GetAtt AfpDeckNotificationCenterAuthFunction.Arn
-            FunctionInvokeRole: !GetAtt AfpDeckNotificationCenterAuthFunctionRole.Arn
+            FunctionInvokeRole: !GetAtt AfpDeckNotificationCenterAuthorizerRole.Arn
             Identity:
               Headers:
                 - Authorization
-        ApiKeyRequired: false
-        UsagePlan:
-          CreateUsagePlan: PER_API
-          UsagePlanName: !Ref PublicApiGatewayName
+
+  AfpDeckNotificationCenterApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 1
+      LogGroupName: /aws/apigateway/AfpDeckNotificationCenterApi
+
+  AfpDeckNotificationCenterAuthLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 1
+      LogGroupName: /aws/lambda/AfpDeckNotificationCenterAuthFunction
+
+  AfpDeckNotificationCenterFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 1
+      LogGroupName: /aws/lambda/AfpDeckNotificationCenterFunction
 
   AfpDeckNotificationCenterAuthFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    DependsOn:
+        - AfpDeckNotificationCenterAuthLogGroup
     Properties:
+      FunctionName: AfpDeckNotificationCenterAuthFunction
       CodeUri: !Ref CodeLocation
-      Handler: authorizer.handler
+      Handler: authorizer.authHandler
       Runtime: nodejs18.x
       Architectures:
         - !Ref LambdaArch
       Environment:
         Variables:
           NODE_OPTIONS: ' --enable-source-maps'
-          USERNAME: !Ref AuthUserName
-          PASSWORD: !Ref AuthPassword
+          APICORE_CLIENT_ID: !Ref ApiCoreClientID
+          APICORE_CLIENT_SECRET: !Ref ApiCoreClientSecret
+          APICORE_BASE_URL: !Ref ApiCoreBaseURL
+          DEBUG_LAMBDA: !Ref DebugLambda
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
       BuildProperties:
@@ -109,9 +179,12 @@ Resources:
         - authorizer.ts
 
   AfpDeckNotificationCenterFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    DependsOn:
+        - AfpDeckNotificationCenterFunctionLogGroup
     Properties:
       CodeUri: !Ref CodeLocation
+      FunctionName: AfpDeckNotificationCenterFunction
       Handler: app.apiHandler
       Runtime: nodejs18.x
       Architectures:
@@ -123,19 +196,19 @@ Resources:
             Path: /
             Method: ANY
             RestApiId: !Ref AfpDeckNotificationCenterApi
-            Auth:
-              ApiKeyRequired: true
         Proxy:
           Type: Api
           Properties:
             RestApiId: !Ref AfpDeckNotificationCenterApi
             Path: /{proxy+}
             Method: ANY
-            Auth:
-              ApiKeyRequired: true
       Environment:
         Variables:
           NODE_OPTIONS: ' --enable-source-maps'
+          APICORE_CLIENT_ID: !Ref ApiCoreClientID
+          APICORE_CLIENT_SECRET: !Ref ApiCoreClientSecret
+          APICORE_BASE_URL: !Ref ApiCoreBaseURL
+          DEBUG_LAMBDA: !Ref DebugLambda
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
       BuildProperties:
@@ -148,17 +221,15 @@ Resources:
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
     Properties:
-      Name:
-        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
+      Name: !Sub ApplicationInsights-SAM-${AWS::StackName}
       ResourceQuery:
         Type: CLOUDFORMATION_STACK_1_0
 
   ApplicationInsightsMonitoring:
     Type: AWS::ApplicationInsights::Application
     Properties:
-      ResourceGroupName:
-        Ref: ApplicationResourceGroup
-      AutoConfigurationEnabled: 'true'
+      ResourceGroupName: !Ref ApplicationResourceGroup
+      AutoConfigurationEnabled: True
 
   AfpDeckNotificationCenterApiBasePathMapping:
     DependsOn: AfpDeckNotificationCenterDomainName
@@ -179,9 +250,9 @@ Outputs:
   AfpDeckNotificationCenterFunction:
     Description: Afpdeck Notification Center Lambda Function ARN
     Value: !GetAtt AfpDeckNotificationCenterFunction.Arn
-  AfpDeckNotificationCenterFunctionIamRole:
-    Description: Implicit IAM Role created for Afpdeck Notification Center function
-    Value: !GetAtt AfpDeckNotificationCenterFunctionRole.Arn
-  AfpDeckNotificationCenterApiApiKey:
-    Description: "You can find your API Key in the AWS console: (Put in the request HEADER as 'x-api-key')"
-    Value: !Sub "https://console.aws.amazon.com/apigateway/home?region=${AWS::Region}#/api-keys/${AfpDeckNotificationCenterApiApiKey}"
+  #AfpDeckNotificationCenterFunctionIamRole:
+  #  Description: Implicit IAM Role created for Afpdeck Notification Center function
+  #  Value: !GetAtt AfpDeckNotificationCenterFunctionRole.Arn
+  #AfpDeckNotificationCenterApiApiKey:
+  #  Description: "You can find your API Key in the AWS console: (Put in the request HEADER as 'x-api-key')"
+  #  Value: !Sub "https://console.aws.amazon.com/apigateway/home?region=${AWS::Region}#/api-keys/${AfpDeckNotificationCenterApiApiKey}"

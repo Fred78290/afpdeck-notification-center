@@ -1,0 +1,28 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  ApiGwAccountConfig:
+    Type: "AWS::ApiGateway::Account"
+    Properties:
+      CloudWatchRoleArn: !GetAtt "ApiGatewayLoggingRole.Arn"
+  ApiGatewayLoggingRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "apigateway.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AWSLambda_FullAccess"
+
+#aws cloudformation deploy \
+#  --stack-name gateway-logging-permission \
+#  --template-file gw-cloudwatch.yaml \
+#  --no-fail-on-empty-changeset \
+#  --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND
