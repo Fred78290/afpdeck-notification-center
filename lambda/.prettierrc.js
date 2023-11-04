@@ -1,7 +1,8 @@
 module.exports = {
+    extends: ['plugin:prettier/recommended'],
     semi: true,
-    trailingComma: "all",
+    trailingComma: 'all',
     singleQuote: true,
-    printWidth: 120,
-    tabWidth: 4
-  };
+    printWidth: 200,
+    tabWidth: 4,
+};
