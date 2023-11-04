@@ -13,6 +13,7 @@
 		"test": "npm run compile && npm run unit"
 	},
 	"dependencies": {
+		"afp-apicore-sdk": "^1.1.5",
 		"auth-header": "^1.0.0",
 		"esbuild": "^0.19.5",
 		"nodejs-base64": "^2.0.0"
@@ -33,5 +34,8 @@
 		"ts-jest": "^29.1.1",
 		"ts-node": "^10.9.1",
 		"typescript": "^5.2.2"
-	}
+	},
+	"lib": [
+		"esnext"
+	]
 }

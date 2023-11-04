@@ -1,4 +1,4 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayRequestAuthorizerEvent, APIGatewayAuthorizerWithContextResult, APIGatewayAuthorizerResult, APIGatewayAuthorizerResultContext } from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayRequestAuthorizerEvent, Context, APIGatewayAuthorizerResult } from 'aws-lambda';
 import { apiHandler } from '../../app';
 import { authHandler } from '../../authorizer';
 import { expect, describe, it } from '@jest/globals';
@@ -6,17 +6,23 @@ import * as dotenv from 'dotenv';
 
 dotenv.config({ path: __dirname + '/../../configs/.env' });
 
+function btoa(str: string) {
+    return Buffer.from(str).toString('base64');
+}
+
 describe('Unit test for app handler', function () {
     it('verifies successful auth', async () => {
-        const authorization: string = 'Basic YWZwZGVjazpBQUQxOEQxMi1DQUYxLTRERkItOTBBMS00OUM2Q0IyRkI4MkM=';
+        const base64 = btoa(`${process.env.APICORE_USERNAME}:${process.env.APICORE_PASSWORD}`);
+        const authorization: string = `Basic ${base64}`;
+        const methodArn = 'arn:aws:execute-api:eu-west-1:0123456789ABC:zqrih6yku6/api/GET/hello';
         const event: APIGatewayRequestAuthorizerEvent = {
             type: 'REQUEST',
             httpMethod: 'get',
-            methodArn: '',
+            methodArn: methodArn,
             resource: 'abcdef',
             path: '/hello',
             headers: {
-                Authorization: 'Basic YWZwZGVjazpBQUQxOEQxMi1DQUYxLTRERkItOTBBMS00OUM2Q0IyRkI4MkM=',
+                Authorization: authorization,
             },
             multiValueHeaders: {
                 Authorization: [authorization],
@@ -62,32 +68,24 @@ describe('Unit test for app handler', function () {
                 stage: 'dev',
             },
         };
-        const context: APIGatewayAuthorizerWithContextResult<APIGatewayAuthorizerResultContext> = {
-            principalId: '1234567',
-            policyDocument: {
-                Version: '2012-10-17',
-                Statement: [],
-            },
-            context: {
-                stringKey: '1234',
-            },
-        };
 
-        const result: APIGatewayAuthorizerResult = await authHandler(event, context);
+        const result: APIGatewayAuthorizerResult = await authHandler(event);
 
-        expect(result).toEqual({
-            principalId: context.principalId,
-            context: context.context,
-            policyDocument: {
-                Version: '2012-10-17',
-                Statement: [
-                    {
-                        Action: 'execute-api:Invoke',
-                        Effect: 'Allow',
-                        Resource: event.resource,
-                    },
-                ],
-            },
+        expect(result.principalId).toEqual(process.env.APICORE_USERNAME);
+        expect(result.context).toBeDefined();
+        expect(result.context?.accessToken).toBeDefined();
+        expect(result.context?.authType).toEqual('credentials');
+        expect(result.context?.refreshToken).toBeDefined();
+        expect(result.context?.tokenExpires).toBeDefined();
+        expect(result.policyDocument).toEqual({
+            Version: '2012-10-17',
+            Statement: [
+                {
+                    Action: 'execute-api:Invoke',
+                    Effect: 'Allow',
+                    Resource: methodArn.substring(0, methodArn.indexOf('/')) + '/*/*/*',
+                },
+            ],
         });
     });
 
