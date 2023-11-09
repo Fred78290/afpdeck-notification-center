@@ -1,4 +1,5 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayRequestAuthorizerEvent, Context, APIGatewayAuthorizerResult } from 'aws-lambda';
+/* eslint-disable prettier/prettier */
+import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayRequestAuthorizerEvent, APIGatewayAuthorizerResult } from 'aws-lambda';
 import { apiHandler } from '../../app';
 import { authHandler } from '../../authorizer';
 import { expect, describe, it } from '@jest/globals';
@@ -10,11 +11,12 @@ function btoa(str: string) {
     return Buffer.from(str).toString('base64');
 }
 
+const base64 = btoa(`${process.env.APICORE_USERNAME}:${process.env.APICORE_PASSWORD}`);
+const authorization: string = `Basic ${base64}`;
+const methodArn = 'arn:aws:execute-api:eu-west-1:0123456789ABC:zqrih6yku6/api/GET/hello';
+
 describe('Unit test for app handler', function () {
     it('verifies successful auth', async () => {
-        const base64 = btoa(`${process.env.APICORE_USERNAME}:${process.env.APICORE_PASSWORD}`);
-        const authorization: string = `Basic ${base64}`;
-        const methodArn = 'arn:aws:execute-api:eu-west-1:0123456789ABC:zqrih6yku6/api/GET/hello';
         const event: APIGatewayRequestAuthorizerEvent = {
             type: 'REQUEST',
             httpMethod: 'get',
@@ -103,8 +105,12 @@ describe('Unit test for app handler', function () {
             requestContext: {
                 accountId: '123456789012',
                 apiId: '1234',
-                authorizer: {},
                 httpMethod: 'get',
+				authorizer: {
+					principalId: process.env.APICORE_USERNAME,
+					username: process.env.APICORE_USERNAME,
+					accessToken: 'Dontcarehere',
+				},
                 identity: {
                     accessKey: '',
                     accountId: '',
@@ -149,3 +155,4 @@ describe('Unit test for app handler', function () {
         );
     });
 });
+

@@ -2,6 +2,10 @@
 import lambda from './lambda/index';
 import express, { Request, Response, NextFunction } from "express";
 import { APIGatewayProxyEvent, APIGatewayRequestAuthorizerEvent, APIGatewayAuthorizerResult } from 'aws-lambda';
+import useragent from 'express-useragent';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 console.log(process.env)
 
@@ -54,6 +58,10 @@ function checkAuth(request: LambdaRequest, response: Response, next: NextFunctio
 	});
 }
 
+function notFound(request: LambdaRequest, response: Response, next: NextFunction) {
+	return next(new HttpError('Not found!', 404));
+}
+
 function handleRequest(request: LambdaRequest, response: Response, next: NextFunction) {
 	const event = requestToEvent(request)
 
@@ -99,8 +107,8 @@ function requestToEvent(request: LambdaRequest): APIGatewayProxyEvent {
 		httpMethod: request.method,
 		isBase64Encoded: false,
 		path: request.path,
-		pathParameters: null,
-		queryStringParameters: request.params,
+		pathParameters: request.params,
+		queryStringParameters: request.query,
 		multiValueQueryStringParameters: null,
 		stageVariables: null,
 		resource: '',
@@ -131,8 +139,8 @@ function requestToEvent(request: LambdaRequest): APIGatewayProxyEvent {
 				cognitoIdentityId: null,
 				cognitoIdentityPoolId: null,
 				principalOrgId: null,
-				sourceIp: '83.204.204.98',
-				userAgent: 'curl/8.1.2',
+				sourceIp: request.ip,
+				userAgent: request.useragent?.source,
 				userArn: null,
 				user: null
 			},
@@ -143,8 +151,15 @@ function requestToEvent(request: LambdaRequest): APIGatewayProxyEvent {
 }
 
 app.use(express.text());
+app.use(express.json());
+app.use(useragent.express);
 
-app.all('/api/*', checkAuth, handleRequest);
+app.post('/api/register/:identifier', checkAuth, handleRequest);
+app.post('/api/push/:identifier', checkAuth, handleRequest);
+app.delete('/api/delete/:identifier', checkAuth, handleRequest);
+app.get('/api/list', checkAuth, handleRequest);
+app.get('/api/', checkAuth, handleRequest);
+app.all('/api/*', checkAuth, notFound);
 
 app.listen(LISTEN_PORT, () => {
 	console.log(`server is listening on ${LISTEN_PORT}`)

@@ -41,10 +41,81 @@ Parameters:
   ApiCoreBaseURL:
     Type: String
     Default: AAD18D12-CAF1-4DFB-90A1-49C6CB2FB82C
+  ApiCorePushUserName:
+    Type: String
+  ApiCorePushPassword:
+    Type: String
+  AfpDeckPushUrl:
+    Type: String
   DebugLambda:
     Type: String
     Default: 'false'
 Resources:
+  AfpDeckNotificationCenterFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AfpDeckNotificationCenterFunctionRole
+      Description: Backend lambda role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2FullAccess
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
+        - arn:aws:iam::aws:policy/AmazonSNSFullAccess
+        - arn:aws:iam::aws:policy/AmazonSESFullAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonVPCFullAccess
+        - arn:aws:iam::aws:policy/AWSLambdaExecute
+        - arn:aws:iam::aws:policy/CloudWatchFullAccess
+      Path: /
+      Policies:
+        - PolicyName: AfpDeckNotificationCenterFunctionRole
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Resource: "*"
+                Action:
+                  - "cognito-identity:*"
+                  - "cognito-idp:*"
+                  - "cognito-sync:*"
+                  - "iam:ListRoles"
+                  - "iam:ListOpenIdConnectProviders"
+                  - "iam:GetRole"
+                  - "iam:ListSAMLProviders"
+                  - "iam:GetSAMLProvider"
+                  - "kinesis:ListStreams"
+                  - "lambda:GetPolicy"
+                  - "lambda:ListFunctions"
+                  - "sns:GetSMSSandboxAccountStatus"
+                  - "sns:ListPlatformApplications"
+                  - "ses:ListIdentities"
+                  - "ses:GetIdentityVerificationAttributes"
+                  - "mobiletargeting:GetApps"
+                  - "acm:ListCertificates"
+                  - "dynamodb:DescribeTable"
+                  - "dynamodb:Query"
+                  - "dynamodb:Scan"
+                  - "dynamodb:GetItem"
+                  - "dynamodb:PutItem"
+                  - "dynamodb:UpdateItem"
+                  - "dynamodb:DeleteItem"
+
+  LambdaRoleInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: AfpDeckNotificationCenterFunctionRole
+      Path: /
+      Roles:
+        - !Ref AfpDeckNotificationCenterFunctionRole
+
 #  AfpDeckNotificationCenterLambdaPermission:
 #    Type: "AWS::Lambda::Permission"
 #    DependsOn:
@@ -104,6 +175,41 @@ Resources:
           AliasTarget:
             HostedZoneId: !GetAtt AfpDeckNotificationCenterDomainName.RegionalHostedZoneId
             DNSName: !GetAtt AfpDeckNotificationCenterDomainName.RegionalDomainName
+
+  AfpDeckNotificationCenterTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref PublicApiGatewayName
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification: # deletes cache keys automatically based on a ttl field which contains a timestamp
+          AttributeName: ttl
+          Enabled: true
+      AttributeDefinitions:
+        - AttributeName: owner
+          AttributeType: S
+        - AttributeName: name
+          AttributeType: S
+        - AttributeName: uno
+          AttributeType: S
+        - AttributeName: created
+          AttributeType: N
+      KeySchema:
+        - AttributeName: owner
+          KeyType: HASH
+        - AttributeName: name
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: uno-index
+          KeySchema:
+            - AttributeName: uno
+              KeyType: HASH
+            - AttributeName: created
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - subscription
+              - updated
 
   AfpDeckNotificationCenterApi:
     Type: AWS::Serverless::Api
@@ -168,6 +274,10 @@ Resources:
           APICORE_CLIENT_ID: !Ref ApiCoreClientID
           APICORE_CLIENT_SECRET: !Ref ApiCoreClientSecret
           APICORE_BASE_URL: !Ref ApiCoreBaseURL
+          APICORE_PUSH_USERNAME: !Ref ApiCorePushUserName
+          APICORE_PUSH_PASSWORD: !Ref ApiCorePushPassword
+          AFPDECK_PUSH_URL: !Ref AfpDeckPushUrl
+          DYNAMODB_TABLE_NAME: !Ref PublicApiGatewayName
           DEBUG_LAMBDA: !Ref DebugLambda
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
@@ -186,6 +296,7 @@ Resources:
       CodeUri: !Ref CodeLocation
       FunctionName: AfpDeckNotificationCenterFunction
       Handler: app.apiHandler
+      Role: !GetAtt AfpDeckNotificationCenterFunctionRole.Arn
       Runtime: nodejs18.x
       Architectures:
         - !Ref LambdaArch
@@ -196,18 +307,40 @@ Resources:
             Path: /
             Method: ANY
             RestApiId: !Ref AfpDeckNotificationCenterApi
-        Proxy:
+        PushNotification:
           Type: Api
           Properties:
             RestApiId: !Ref AfpDeckNotificationCenterApi
-            Path: /{proxy+}
-            Method: ANY
+            Path: /push/{identifier}
+            Method: POST
+        RegisterNotification:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AfpDeckNotificationCenterApi
+            Path: /register/{identifier}
+            Method: POST
+        DeleteNotification:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AfpDeckNotificationCenterApi
+            Path: /delete/{identifier}
+            Method: DELETE
+        ListNotification:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AfpDeckNotificationCenterApi
+            Path: /list
+            Method: GET
       Environment:
         Variables:
           NODE_OPTIONS: ' --enable-source-maps'
           APICORE_CLIENT_ID: !Ref ApiCoreClientID
           APICORE_CLIENT_SECRET: !Ref ApiCoreClientSecret
           APICORE_BASE_URL: !Ref ApiCoreBaseURL
+          APICORE_PUSH_USERNAME: !Ref ApiCorePushUserName
+          APICORE_PUSH_PASSWORD: !Ref ApiCorePushPassword
+          AFPDECK_PUSH_URL: !Ref AfpDeckPushUrl
+          DYNAMODB_TABLE_NAME: !Ref PublicApiGatewayName
           DEBUG_LAMBDA: !Ref DebugLambda
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild

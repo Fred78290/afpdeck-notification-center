@@ -38,11 +38,15 @@ ParameterKey=ApiDomainName,ParameterValue=afpdeck-notification-center.${DOMAIN_N
 ParameterKey=ApiCoreClientID,ParameterValue=${APICORE_CLIENT_ID}
 ParameterKey=ApiCoreClientSecret,ParameterValue=${APICORE_CLIENT_SECRET}
 ParameterKey=ApiCoreBaseURL,ParameterValue=${APICORE_BASE_URL}
+ParameterKey=ApiCorePushUserName,ParameterValue=${APICORE_USERNAME}
+ParameterKey=ApiCorePushPassword,ParameterValue=${APICORE_PASSWORD}
+ParameterKey=AfpDeckPushUrl,ParameterValue=https://afpdeck-notification-center.${DOMAIN_NAME}/api/push/
 ParameterKey=DebugLambda,ParameterValue=${DEBUG_LAMBDA}
 EOF
 )
 
 pushd lambda
+rm -rf node_modules
 npm install
 npm run test
 popd

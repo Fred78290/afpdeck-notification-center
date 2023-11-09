@@ -11,5 +11,9 @@ export default {
     collectCoverage: true,
     coverageDirectory: 'coverage',
     coverageProvider: 'v8',
+	testEnvironment: 'node',
+	preset: 'ts-jest',
     testMatch: ['**/tests/unit/*.test.ts'],
+	transformIgnorePatterns: ['/dist/.+\\.js'],
+	verbose: true
 };
