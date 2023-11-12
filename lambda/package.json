@@ -7,7 +7,7 @@
 	"author": "SAM CLI",
 	"license": "MIT",
 	"scripts": {
-		"unit": "jest",
+		"unit": "jest --runInBand",
 		"lint": "eslint '*.ts' --quiet --fix",
 		"compile": "tsc",
 		"test": "npm run compile && npm run unit"
@@ -15,19 +15,25 @@
 	"dependencies": {
 		"@aws-sdk/lib-dynamodb": "^3.441.0",
 		"@hexlabs/dynamo-ts": "^4.0.155",
-		"afp-apicore-sdk": "^1.1.6",
+		"afp-apicore-sdk": "^1.1.7",
 		"auth-header": "^1.0.0",
 		"esbuild": "^0.19.5",
-		"nodejs-base64": "^2.0.0"
+		"nodejs-base64": "^2.0.0",
+		"web-push": "^3.6.6"
 	},
 	"devDependencies": {
 		"@aws-sdk/client-dynamodb": "^3.441.0",
+		"@babel/core": "^7.23.3",
+		"@babel/preset-env": "^7.23.3",
+		"@babel/preset-typescript": "^7.23.3",
 		"@types/auth-header": "^1.0.4",
 		"@types/aws-lambda": "^8.10.125",
 		"@types/jest": "^29.5.7",
 		"@types/node": "^20.8.10",
+		"@types/web-push": "^3.6.3",
 		"@typescript-eslint/eslint-plugin": "^6.9.1",
 		"@typescript-eslint/parser": "^6.9.1",
+		"babel-jest": "^29.7.0",
 		"dotenv": "^16.3.1",
 		"eslint": "^8.52.0",
 		"eslint-config-prettier": "^9.0.0",

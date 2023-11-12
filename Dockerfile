@@ -1,4 +1,4 @@
-FROM node
+FROM node:20-alpine
 
 LABEL version="1.0.0"
 LABEL name="afpdeck-notification-center"
@@ -16,7 +16,7 @@ ENV APICORE_EMAIL=
 ENV APICORE_PUSH_USERNAME=
 ENV APICORE_PUSH_PASSWORD=
 ENV AFPDECK_PUSH_URL=
-ENV DYNAMODB_TABLE_NAME=afpdeck-notification-center
+ENV SUBSCRIPTIONS_TABLE_NAME=afpdeck-notification-center
 
 WORKDIR /usr/src/app
 

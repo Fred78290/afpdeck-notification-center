@@ -191,7 +191,13 @@ Resources:
           AttributeType: S
         - AttributeName: uno
           AttributeType: S
+        - AttributeName: browserID
+          AttributeType: S
+        - AttributeName: subscription
+          AttributeType: S
         - AttributeName: created
+          AttributeType: N
+        - AttributeName: updated
           AttributeType: N
       KeySchema:
         - AttributeName: owner
@@ -210,6 +216,50 @@ Resources:
             NonKeyAttributes:
               - subscription
               - updated
+        - IndexName: browserID-index
+          KeySchema:
+            - AttributeName: browserID
+              KeyType: HASH
+            - AttributeName: created
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - subscription
+              - updated
+
+  AfpDeckWebPushUserTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: afpdeck-webpush-user
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification: # deletes cache keys automatically based on a ttl field which contains a timestamp
+          AttributeName: ttl
+          Enabled: true
+      AttributeDefinitions:
+        - AttributeName: owner
+          AttributeType: S
+        - AttributeName: browserID
+          AttributeType: S
+        - AttributeName: publicKey
+          AttributeType: S
+        - AttributeName: privateKey
+          AttributeType: S
+        - AttributeName: endpoint
+          AttributeType: S
+        - AttributeName: p256dh
+          AttributeType: S
+        - AttributeName: auth
+          AttributeType: S
+        - AttributeName: created
+          AttributeType: N
+        - AttributeName: updated
+          AttributeType: N
+      KeySchema:
+        - AttributeName: owner
+          KeyType: HASH
+        - AttributeName: browserID
+          KeyType: RANGE
 
   AfpDeckNotificationCenterApi:
     Type: AWS::Serverless::Api
@@ -277,7 +327,8 @@ Resources:
           APICORE_PUSH_USERNAME: !Ref ApiCorePushUserName
           APICORE_PUSH_PASSWORD: !Ref ApiCorePushPassword
           AFPDECK_PUSH_URL: !Ref AfpDeckPushUrl
-          DYNAMODB_TABLE_NAME: !Ref PublicApiGatewayName
+          SUBSCRIPTIONS_TABLE_NAME: !Ref PublicApiGatewayName
+          WEBPUSH_TABLE_NAME: afpdeck-webpush-user
           DEBUG_LAMBDA: !Ref DebugLambda
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
@@ -307,6 +358,18 @@ Resources:
             Path: /
             Method: ANY
             RestApiId: !Ref AfpDeckNotificationCenterApi
+        WebPushUserCreate:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AfpDeckNotificationCenterApi
+            Path: /webpush
+            Method: POST
+        WebPushUserUpdate:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AfpDeckNotificationCenterApi
+            Path: /webpush
+            Method: PUT
         PushNotification:
           Type: Api
           Properties:
@@ -340,7 +403,8 @@ Resources:
           APICORE_PUSH_USERNAME: !Ref ApiCorePushUserName
           APICORE_PUSH_PASSWORD: !Ref ApiCorePushPassword
           AFPDECK_PUSH_URL: !Ref AfpDeckPushUrl
-          DYNAMODB_TABLE_NAME: !Ref PublicApiGatewayName
+          SUBSCRIPTIONS_TABLE_NAME: afpdeck-subscriptions
+          WEBPUSH_TABLE_NAME: afpdeck-webpush
           DEBUG_LAMBDA: !Ref DebugLambda
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild

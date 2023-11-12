@@ -1,14 +1,18 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import ApiCore from 'afp-apicore-sdk';
 
 import { APIGatewayProxyEvent, APIGatewayProxyEventQueryStringParameters, APIGatewayProxyResult } from 'aws-lambda';
-import { Subscription, AuthType, ServiceType, RegisterService } from 'afp-apicore-sdk/dist/types';
+import { Subscription, AuthType, ServiceType, RegisterService, PostedPushNoticationData, NoticationData, NoticationUserPayload } from 'afp-apicore-sdk/dist/types';
 import { DynamoDB } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb';
 import { defineTable, DynamoTypeFrom, TableClient } from '@hexlabs/dynamo-ts';
+import webpush, { VapidKeys, PushSubscription, SendResult } from 'web-push';
 
-const debug = process.env.DEBUG_LAMBDA ? process.env.DEBUG_LAMBDA === 'true' : false;
+let debug = process.env.DEBUG_LAMBDA ? process.env.DEBUG_LAMBDA === 'true' : false;
 const AFPDECK_NOTIFICATIONCENTER_SERVICE = 'afpdeck';
-const DYNAMODB_TABLE_NAME = process.env.DYNAMODB_TABLE_NAME ?? 'afpdeck-notification-center';
+const ALL_BROWSERS = 'all';
+const DEFAULT_WEBPUSH_TABLENAME = 'afpdeck-webpush';
+const DEFAULT_SUBSCRIPTIONS_TABLENAME = 'afpdeck-subscriptions';
 
 interface Identify {
     principalId: string;
@@ -33,11 +37,34 @@ class HttpError extends Error {
 
 const dynamo = new DynamoDB();
 const client = DynamoDBDocument.from(dynamo);
-const subscriptionsTable = defineTable(
+
+export interface WebPushUser {
+    apiKeys: VapidKeys;
+    subscription: PushSubscription;
+}
+
+export const webPushUserTable = defineTable(
     {
         owner: 'string',
-        uno: 'string',
+        browserID: 'string',
+        publicKey: 'string',
+        privateKey: 'string',
+        endpoint: 'string',
+        p256dh: 'string',
+        auth: 'string',
+        created: 'number',
+        updated: 'number',
+    },
+    'owner',
+    'browserID',
+);
+
+export const subscriptionsTable = defineTable(
+    {
+        owner: 'string',
         name: 'string',
+        uno: 'string',
+        browserID: 'string',
         subscription: 'string',
         created: 'number',
         updated: 'number',
@@ -49,54 +76,110 @@ const subscriptionsTable = defineTable(
             partitionKey: 'uno',
             sortKey: 'created',
         },
+        'browserID-index': {
+            partitionKey: 'browserID',
+            sortKey: 'created',
+        },
     },
 );
 
+type SubscriptionsTable = typeof subscriptionsTable;
+type WebPushUserTable = typeof webPushUserTable;
 type SubscriptionDynamoDB = DynamoTypeFrom<typeof subscriptionsTable>;
 
-const subscriptionTableClient = TableClient.build(subscriptionsTable, {
-    client: client,
-    logStatements: true,
-    tableName: DYNAMODB_TABLE_NAME,
-});
+let subscriptionTableClient: TableClient<SubscriptionsTable>;
+let webPushUserTableClient: TableClient<WebPushUserTable>;
 
-async function storeSubscriptionInDynamoDB(owner: string, name: string, uno: string, notification: Subscription): Promise<SubscriptionDynamoDB | undefined> {
-    const now = Date.now();
-    const old = await subscriptionTableClient.get({
-        owner: owner,
-        name: name,
-    });
-
-    let created = now;
-
-    if (old.item) {
-        created = old.item.created;
+function getWebPushUserTableClient(tableName?: string): TableClient<WebPushUserTable> {
+    if (!webPushUserTableClient) {
+        webPushUserTableClient = TableClient.build(webPushUserTable, {
+            client: client,
+            logStatements: true,
+            tableName: tableName ?? DEFAULT_WEBPUSH_TABLENAME,
+        });
     }
 
-    const result = await subscriptionTableClient.put(
+    return webPushUserTableClient;
+}
+
+function getSubscriptionTableClient(tableName?: string): TableClient<SubscriptionsTable> {
+    if (!subscriptionTableClient) {
+        tableName = tableName ?? DEFAULT_SUBSCRIPTIONS_TABLENAME;
+
+        subscriptionTableClient = TableClient.build(subscriptionsTable, {
+            client: client,
+            logStatements: true,
+            tableName: tableName,
+        });
+    }
+
+    return subscriptionTableClient;
+}
+
+async function getSubscriptionsInDynamoDB(owner: string, name: string) {
+    const subscription = await getSubscriptionTableClient(process.env.SUBSCRIPTIONS_TABLE_NAME).query({
+        owner: owner,
+        name: (subKey) => subKey.eq(name),
+    });
+
+    return subscription.member;
+}
+
+async function storeSubscriptionInDynamoDB(owner: string, name: string, uno: string, notification: Subscription, browserID: string): Promise<SubscriptionDynamoDB | undefined> {
+    const now = Date.now();
+    const old = await getSubscriptionTableClient(process.env.SUBSCRIPTIONS_TABLE_NAME).query(
         {
             owner: owner,
-            uno: uno,
-            name: name,
-            subscription: JSON.stringify(notification),
-            created: created,
-            updated: now,
+            name: (sortKey) => sortKey.eq(name),
         },
         {
-            returnValues: 'ALL_OLD',
+            filter: (compare) => compare().browserID.eq(browserID),
         },
     );
 
-    return result.item;
+    if (old.member.length > 0) {
+        const result = await getSubscriptionTableClient(process.env.SUBSCRIPTIONS_TABLE_NAME).update({
+            key: {
+                name: name,
+                owner: owner,
+            },
+            updates: {
+                uno: uno,
+                browserID: browserID,
+                subscription: JSON.stringify(notification),
+                updated: now,
+            },
+        });
+
+        return result.item;
+    } else {
+        const result = await getSubscriptionTableClient(process.env.SUBSCRIPTIONS_TABLE_NAME).put(
+            {
+                owner: owner,
+                uno: uno,
+                name: name,
+                browserID: browserID,
+                subscription: JSON.stringify(notification),
+                created: now,
+                updated: now,
+            },
+            {
+                returnValues: 'ALL_OLD',
+            },
+        );
+
+        return result.item;
+    }
 }
 
-export async function deleteSubscriptionInDynamoDB(owner: string, name: string): Promise<SubscriptionDynamoDB | undefined> {
-    const result = await subscriptionTableClient.delete(
+export async function deleteSubscriptionInDynamoDB(owner: string, name: string, browserID: string): Promise<SubscriptionDynamoDB | undefined> {
+    const result = await getSubscriptionTableClient(process.env.SUBSCRIPTIONS_TABLE_NAME).delete(
         {
             owner: owner,
             name: name,
         },
         {
+            condition: (condition) => condition().browserID.eq(browserID),
             returnValues: 'ALL_OLD',
         },
     );
@@ -151,12 +234,11 @@ async function listSubscriptions(identity: Identify, serviceDefinition: Register
     };
 }
 
-async function registerNotification(identifier: string, notification: Subscription, identity: Identify, serviceDefinition: RegisterService): Promise<APIGatewayProxyResult> {
-    console.log(notification);
-	const notificationCenter = await checkIfServiceIsRegistered(identity, serviceDefinition);
+async function registerNotification(identifier: string, notification: Subscription, identity: Identify, serviceDefinition: RegisterService, browserID: string): Promise<APIGatewayProxyResult> {
+    const notificationCenter = await checkIfServiceIsRegistered(identity, serviceDefinition);
     const notificationIdentifier = await notificationCenter.addSubscription(identifier, serviceDefinition.name, notification);
 
-    await storeSubscriptionInDynamoDB(identity.principalId, identifier, notificationIdentifier, notification);
+    await storeSubscriptionInDynamoDB(identity.principalId, identifier, notificationIdentifier, notification, browserID);
 
     return {
         statusCode: 200,
@@ -166,20 +248,92 @@ async function registerNotification(identifier: string, notification: Subscripti
     };
 }
 
-async function pushNotification(identifier: string, notification: Subscription): Promise<APIGatewayProxyResult> {
+async function sendNotificationToClient(notication: NoticationData, subscription: NoticationUserPayload): Promise<Promise<webpush.SendResult>[]> {
+    const subItems = await getSubscriptionsInDynamoDB(subscription.userID, subscription.name);
+    const result: Promise<SendResult>[] = [];
+
+    for (const subItem of subItems) {
+        const userPushKey = await findPushKeyForIdentity(subscription.userID, subItem.browserID);
+
+        if (userPushKey.count && userPushKey.count > 0) {
+            const datas = {
+                name: subscription.name,
+                uno: subscription.identifier,
+                isFree: subscription.isFree,
+                documentUrl: subscription.documentUrl,
+                thumbnailUrl: subscription.thumbnailUrl,
+                payload: notication,
+            };
+
+            userPushKey.member.forEach((m) => {
+                const push = webpush.sendNotification(
+                    {
+                        endpoint: m.endpoint,
+                        keys: {
+                            auth: m.auth,
+                            p256dh: m.p256dh,
+                        },
+                    },
+                    JSON.stringify(datas),
+                    {
+                        vapidDetails: {
+                            subject: m.browserID,
+                            privateKey: m.privateKey,
+                            publicKey: m.publicKey,
+                        },
+                    },
+                );
+
+                result.push(push);
+            });
+        }
+    }
+
+    return result;
+}
+
+async function pushNotification(identifier: string, pushData: PostedPushNoticationData): Promise<APIGatewayProxyResult> {
+    console.log(pushData);
+
+    let all: Promise<SendResult>[] = [];
+
+    for (const payload of pushData.payload) {
+        const datas: any = {};
+        const notif: any = payload;
+
+        Object.keys(payload).forEach((key) => {
+            if (key !== 'subscriptions') datas[key] = notif[key];
+        });
+
+        for (const subscription of payload.subscriptions) {
+            all = all.concat(await sendNotificationToClient(datas, subscription));
+        }
+    }
+
+    Promise.all(all)
+        .then(() => {
+            console.info(`done: ${JSON.stringify(pushData)}`);
+        })
+        .catch((e) => {
+            console.error(`${e}: ${JSON.stringify(pushData)}`);
+        });
+
     return {
         statusCode: 200,
         body: JSON.stringify({
-            message: 'Afpdeck Notification pushNotification',
+            response: {
+                status: 0,
+                message: 'processing',
+            },
         }),
     };
 }
 
-async function deleteNotification(identifier: string, identity: Identify, serviceDefinition: RegisterService): Promise<APIGatewayProxyResult> {
+async function deleteNotification(identifier: string, identity: Identify, serviceDefinition: RegisterService, browserID: string): Promise<APIGatewayProxyResult> {
     const notificationCenter = getNotificationCenter(identity);
     const notificationIdentifier = await notificationCenter.deleteSubscription(identifier, serviceDefinition.name);
 
-    await deleteSubscriptionInDynamoDB(identity.principalId, identifier);
+    await deleteSubscriptionInDynamoDB(identity.principalId, identifier, browserID);
 
     return {
         statusCode: 200,
@@ -252,6 +406,69 @@ function getServiceDefinition(queryStringParameters: APIGatewayProxyEventQuerySt
     throw new HttpError('Missing envars', 500);
 }
 
+async function findPushKeyForIdentity(principalId: string, browserID: string) {
+    const webpushTable = getWebPushUserTableClient(process.env.WEBPUSH_TABLE_NAME);
+
+    return webpushTable.query({ owner: principalId }, { filter: (compare) => compare().browserID.eq(browserID) || browserID === ALL_BROWSERS });
+}
+
+async function storeWebPushUserKey(principalId: string, browserID: string, data: WebPushUser): Promise<APIGatewayProxyResult> {
+    const now = Date.now();
+    const webpushTable = getWebPushUserTableClient(process.env.WEBPUSH_TABLE_NAME);
+
+    await webpushTable.put({
+        owner: principalId,
+        browserID: browserID,
+        publicKey: data.apiKeys.publicKey,
+        privateKey: data.apiKeys.privateKey,
+        endpoint: data.subscription.endpoint,
+        p256dh: data.subscription.keys.p256dh,
+        auth: data.subscription.keys.auth,
+        created: now,
+        updated: now,
+    });
+
+    return {
+        statusCode: 200,
+        body: JSON.stringify({
+            response: {
+                message: 'OK',
+                status: 0,
+            },
+        }),
+    };
+}
+
+async function updateWebPushUserKey(principalId: string, browserID: string, data: WebPushUser): Promise<APIGatewayProxyResult> {
+    const now = Date.now();
+    const webpushTable = getWebPushUserTableClient(process.env.WEBPUSH_TABLE_NAME);
+
+    await webpushTable.update({
+        key: {
+            owner: principalId,
+            browserID: browserID,
+        },
+        updates: {
+            publicKey: data.apiKeys.publicKey,
+            privateKey: data.apiKeys.privateKey,
+            endpoint: data.subscription.endpoint,
+            p256dh: data.subscription.keys.p256dh,
+            auth: data.subscription.keys.auth,
+            updated: now,
+        },
+    });
+
+    return {
+        statusCode: 200,
+        body: JSON.stringify({
+            response: {
+                message: 'OK',
+                status: 0,
+            },
+        }),
+    };
+}
+
 /**
  *
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -263,6 +480,8 @@ function getServiceDefinition(queryStringParameters: APIGatewayProxyEventQuerySt
  */
 export const apiHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     let response: Promise<APIGatewayProxyResult>;
+    
+    debug = process.env.DEBUG_LAMBDA ? process.env.DEBUG_LAMBDA === 'true' : false;
 
     if (debug) {
         console.log(event);
@@ -273,14 +492,25 @@ export const apiHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewa
 
         if (authorizer?.principalId && authorizer?.accessToken) {
             const serviceIdentifier = getServiceDefinition(event.queryStringParameters);
+            const browserID = event.queryStringParameters?.browserID ?? ALL_BROWSERS;
             const identity = {
                 principalId: authorizer?.principalId,
                 accessToken: authorizer?.accessToken,
             };
 
-            if (event.resource.startsWith('/register')) {
+            if (event.resource.startsWith('/webpush')) {
+                if (event.body) {
+                    if (event.httpMethod.toUpperCase() === 'POST') {
+                        response = storeWebPushUserKey(identity.principalId, browserID, JSON.parse(event.body));
+                    } else {
+                        response = updateWebPushUserKey(identity.principalId, browserID, JSON.parse(event.body));
+                    }
+                } else {
+                    throw new HttpError('Missing parameters to register webpush user key', 400);
+                }
+            } else if (event.resource.startsWith('/register')) {
                 if (event.body && event.pathParameters?.identifier) {
-                    response = registerNotification(event.pathParameters?.identifier, JSON.parse(event.body), identity, serviceIdentifier);
+                    response = registerNotification(event.pathParameters?.identifier, JSON.parse(event.body), identity, serviceIdentifier, browserID);
                 } else {
                     throw new HttpError('Missing parameters to register subscription', 400);
                 }
@@ -290,11 +520,11 @@ export const apiHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewa
                 if (event.body && event.pathParameters?.identifier) {
                     response = pushNotification(event.pathParameters?.identifier, JSON.parse(event.body));
                 } else {
-                    throw new HttpError('Missing parameters to list subscription', 400);
+                    throw new HttpError('Missing parameters to push subscription', 400);
                 }
             } else if (event.resource.startsWith('/delete')) {
                 if (event.pathParameters?.identifier) {
-                    response = deleteNotification(event.pathParameters?.identifier, identity, serviceIdentifier);
+                    response = deleteNotification(event.pathParameters?.identifier, identity, serviceIdentifier, browserID);
                 } else {
                     throw new HttpError('Missing parameters to delete subscription', 400);
                 }

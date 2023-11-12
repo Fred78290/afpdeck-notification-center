@@ -1,6 +1,7 @@
 /* eslint-disable prettier/prettier */
 import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventQueryStringParameters, APIGatewayProxyEventPathParameters } from 'aws-lambda';
 import { apiHandler } from '../../app';
+import { DynamoDB, CreateTableCommandInput } from '@aws-sdk/client-dynamodb';
 import testSubscription from './testSubscription.json';
 import testPush from './testPush.json';
 import * as dotenv from 'dotenv';
@@ -9,6 +10,59 @@ import ApiCore from 'afp-apicore-sdk';
 const serviceName = 'test-notification-center';
 
 dotenv.config({ path: __dirname + '/../../configs/.env' });
+
+async function createDynamoDBTable(tableName: string, args: CreateTableCommandInput) {
+	const dynamo = new DynamoDB();
+
+	try {
+		await dynamo.describeTable({
+			TableName: tableName,
+		});
+	} catch(e) {
+        await dynamo.createTable(args);
+	}
+}
+
+async function createDynamoDBTables() {
+	const webPushTableName = process.env.WEBPUSH_TABLE_NAME ?? 'test-afpdeck-webpush';
+    const subscriptionsTableName = process.env.SUBSCRIPTIONS_TABLE_NAME ?? 'test-afpdeck-subscriptions';
+
+	await createDynamoDBTable(webPushTableName, {
+		TableName: webPushTableName,
+		BillingMode: 'PAY_PER_REQUEST',
+		KeySchema: [
+			{ AttributeName: 'owner', KeyType: 'HASH' },
+			{ AttributeName: 'browserID', KeyType: 'RANGE' },
+		],
+		AttributeDefinitions: [
+			{ AttributeName: 'owner', AttributeType: 'S' },
+			{ AttributeName: 'browserID', AttributeType: 'S' },
+		],
+	});
+
+	await createDynamoDBTable(subscriptionsTableName, {
+		TableName: subscriptionsTableName,
+		BillingMode: 'PAY_PER_REQUEST',
+		KeySchema: [
+			{ AttributeName: 'owner', KeyType: 'HASH' },
+			{ AttributeName: 'name', KeyType: 'RANGE' },
+		],
+		AttributeDefinitions: [
+			{ AttributeName: 'owner', AttributeType: 'S' },
+			{ AttributeName: 'name', AttributeType: 'S' },
+		],
+	});
+
+}
+
+async function deleteDynamoDBTables() {
+	const dynamo = new DynamoDB();
+	const webPushTableName = process.env.WEBPUSH_TABLE_NAME ?? 'test-afpdeck-webpush';
+    const subscriptionsTableName = process.env.SUBSCRIPTIONS_TABLE_NAME ?? 'test-afpdeck-subscriptions';
+
+	await dynamo.deleteTable({TableName: webPushTableName});
+	await dynamo.deleteTable({TableName: subscriptionsTableName});
+}
 
 async function buildEvent(method: string, path: string, pathParameters: APIGatewayProxyEventPathParameters | null, queryStringParameters: APIGatewayProxyEventQueryStringParameters | null, body: unknown | null) {
 	const apicore = new ApiCore({
@@ -79,16 +133,29 @@ async function buildEvent(method: string, path: string, pathParameters: APIGatew
 	return event;
 }
 
-describe('Unit test for api', function () {
-	it('verifies successful register', async () => {
-		const event = await buildEvent('POST', '/register', {
-			identifier: serviceName
-		}, {
-			serviceName: serviceName,
-			serviceType: 'mail',
-			serviceData: JSON.stringify({ address: process.env.APICORE_EMAIL }),
-		}, testSubscription);
+beforeAll(async () => {
+	await createDynamoDBTables();
+	console.log("Create dynamodb tables")
+});
 
+afterAll(async () => {
+	await deleteDynamoDBTables();
+	console.log("Delete dynamodb tables")
+});
+
+describe('Unit test for api', function () {
+	const servicePathParameters = {
+		identifier: serviceName,
+	};
+
+	const serviceDefinition = {
+		serviceName: serviceName,
+		serviceType: 'mail',
+		serviceData: JSON.stringify({ address: process.env.APICORE_EMAIL }),
+	};
+
+	it('verifies successful register', async () => {
+		const event = await buildEvent('POST', `/register/${serviceName}`, servicePathParameters, serviceDefinition, testSubscription);
 		const result = await apiHandler(event);
 
 		console.log(result);
@@ -97,8 +164,7 @@ describe('Unit test for api', function () {
 	});
 
 	it('verifies successful list', async () => {
-		const event = await buildEvent('GET', '/list', null, null, null);
-
+		const event = await buildEvent('GET', '/list', null, serviceDefinition, null);
 		const result = await apiHandler(event);
 
 		console.log(result);
@@ -107,11 +173,8 @@ describe('Unit test for api', function () {
 	});
 
 	it('verifies successful push', async () => {
-		const event = await buildEvent('POST', '/push', {
-			identifier: serviceName
-		}, null, testPush);
-
-		const result: APIGatewayProxyResult = await apiHandler(event);
+		const event = await buildEvent('POST', `/push/${serviceName}`, servicePathParameters, serviceDefinition, testPush);
+		const result = await apiHandler(event);
 
 		console.log(result);
 
@@ -119,10 +182,7 @@ describe('Unit test for api', function () {
 	});
 
 	it('verifies successful delete', async () => {
-		const event = await buildEvent('DELETE', '/delete', {
-			identifier: serviceName,
-		}, null, null);
-
+		const event = await buildEvent('DELETE', `/delete/${serviceName}`, servicePathParameters, serviceDefinition, null);
 		const result = await apiHandler(event);
 
 		console.log(result);

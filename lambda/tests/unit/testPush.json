@@ -1,3 +1,7 @@
 {
-    
+    "type": "notification",
+	"emitter": "Core API",
+	"version": "1.0.0",
+	"uuid": "5380CF71-D7B7-48E6-8651-5AE0A1350017",
+	"payload": []
 }
