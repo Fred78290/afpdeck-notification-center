@@ -50,6 +50,15 @@ Parameters:
   DebugLambda:
     Type: String
     Default: 'false'
+  WebPushTableName:
+    Type: String
+    Default: 'afpdeck-webpush'
+  SubscriptionsTableName:
+    Type: String
+    Default: 'afpdeck-subscriptions'
+  UserPreferencesTableName:
+    Type: String
+    Default: 'afpdeck-preferences'
 Resources:
   AfpDeckNotificationCenterFunctionRole:
     Type: AWS::IAM::Role
@@ -176,10 +185,29 @@ Resources:
             HostedZoneId: !GetAtt AfpDeckNotificationCenterDomainName.RegionalHostedZoneId
             DNSName: !GetAtt AfpDeckNotificationCenterDomainName.RegionalDomainName
 
+  AfpDeckNotificationCenterUserPrefsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref UserPreferencesTableName
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification: # deletes cache keys automatically based on a ttl field which contains a timestamp
+          AttributeName: ttl
+          Enabled: true
+      AttributeDefinitions:
+        - AttributeName: owner
+          AttributeType: S
+        - AttributeName: name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: owner
+          KeyType: HASH
+        - AttributeName: name
+          KeyType: RANGE
+          
   AfpDeckNotificationCenterTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Ref PublicApiGatewayName
+      TableName: !Ref SubscriptionsTableName
       BillingMode: PAY_PER_REQUEST
       TimeToLiveSpecification: # deletes cache keys automatically based on a ttl field which contains a timestamp
           AttributeName: ttl
@@ -193,11 +221,7 @@ Resources:
           AttributeType: S
         - AttributeName: browserID
           AttributeType: S
-        - AttributeName: subscription
-          AttributeType: S
         - AttributeName: created
-          AttributeType: N
-        - AttributeName: updated
           AttributeType: N
       KeySchema:
         - AttributeName: owner
@@ -231,7 +255,7 @@ Resources:
   AfpDeckWebPushUserTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: afpdeck-webpush-user
+      TableName: !Ref WebPushTableName
       BillingMode: PAY_PER_REQUEST
       TimeToLiveSpecification: # deletes cache keys automatically based on a ttl field which contains a timestamp
           AttributeName: ttl
@@ -241,20 +265,6 @@ Resources:
           AttributeType: S
         - AttributeName: browserID
           AttributeType: S
-        - AttributeName: publicKey
-          AttributeType: S
-        - AttributeName: privateKey
-          AttributeType: S
-        - AttributeName: endpoint
-          AttributeType: S
-        - AttributeName: p256dh
-          AttributeType: S
-        - AttributeName: auth
-          AttributeType: S
-        - AttributeName: created
-          AttributeType: N
-        - AttributeName: updated
-          AttributeType: N
       KeySchema:
         - AttributeName: owner
           KeyType: HASH
@@ -328,7 +338,8 @@ Resources:
           APICORE_PUSH_PASSWORD: !Ref ApiCorePushPassword
           AFPDECK_PUSH_URL: !Ref AfpDeckPushUrl
           SUBSCRIPTIONS_TABLE_NAME: !Ref PublicApiGatewayName
-          WEBPUSH_TABLE_NAME: afpdeck-webpush-user
+          WEBPUSH_TABLE_NAME: !Ref SubscriptionsTableName
+          USERPREFS_TABLENAME: !Ref UserPreferencesTableName
           DEBUG_LAMBDA: !Ref DebugLambda
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
@@ -394,6 +405,18 @@ Resources:
             RestApiId: !Ref AfpDeckNotificationCenterApi
             Path: /list
             Method: GET
+        GetUserPreferences:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AfpDeckNotificationCenterApi
+            Path: /preferences/{identifier}
+            Method: GET
+        StoreUserPreferences:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AfpDeckNotificationCenterApi
+            Path: /preferences/{identifier}
+            Method: POST
       Environment:
         Variables:
           NODE_OPTIONS: ' --enable-source-maps'
@@ -403,8 +426,9 @@ Resources:
           APICORE_PUSH_USERNAME: !Ref ApiCorePushUserName
           APICORE_PUSH_PASSWORD: !Ref ApiCorePushPassword
           AFPDECK_PUSH_URL: !Ref AfpDeckPushUrl
-          SUBSCRIPTIONS_TABLE_NAME: afpdeck-subscriptions
-          WEBPUSH_TABLE_NAME: afpdeck-webpush
+          SUBSCRIPTIONS_TABLE_NAME: !Ref PublicApiGatewayName
+          WEBPUSH_TABLE_NAME: !Ref SubscriptionsTableName
+          USERPREFS_TABLENAME: !Ref UserPreferencesTableName
           DEBUG_LAMBDA: !Ref DebugLambda
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
