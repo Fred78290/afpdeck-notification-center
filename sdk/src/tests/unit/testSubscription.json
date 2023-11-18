@@ -1,0 +1,22 @@
+{
+    "dontDisturb": false,
+    "langues": [
+        "fr"
+    ],
+    "query": {
+        "AND": [
+            {
+                "name": "product",
+                "value": "news"
+            },
+            {
+                "name": "urgency",
+                "in": [
+                    1,
+                    2,
+                    3
+                ]
+            }
+        ]
+    }
+}
