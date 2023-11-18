@@ -8,11 +8,13 @@ import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb';
 import { defineTable, DynamoTypeFrom, TableClient } from '@hexlabs/dynamo-ts';
 import webpush, { VapidKeys, PushSubscription, SendResult } from 'web-push';
 
-let debug = process.env.DEBUG_LAMBDA ? process.env.DEBUG_LAMBDA === 'true' : false;
 const AFPDECK_NOTIFICATIONCENTER_SERVICE = 'afpdeck';
 const ALL_BROWSERS = 'all';
 const DEFAULT_WEBPUSH_TABLENAME = 'afpdeck-webpush';
 const DEFAULT_SUBSCRIPTIONS_TABLENAME = 'afpdeck-subscriptions';
+const DEFAULT_USERPREFS_TABLENAME = 'afpdeck-preferences';
+
+let debug = process.env.DEBUG_LAMBDA ? process.env.DEBUG_LAMBDA === 'true' : false;
 
 interface Identify {
     principalId: string;
@@ -42,6 +44,17 @@ export interface WebPushUser {
     apiKeys: VapidKeys;
     subscription: PushSubscription;
 }
+
+export const userPreferencesTable = defineTable(
+    {
+        owner: 'string',
+        name: 'string',
+        preferences: 'string',
+        updated: 'number',
+    },
+    'owner',
+    'name',
+);
 
 export const webPushUserTable = defineTable(
     {
@@ -83,12 +96,26 @@ export const subscriptionsTable = defineTable(
     },
 );
 
+type UserPreferencesTable = typeof userPreferencesTable;
 type SubscriptionsTable = typeof subscriptionsTable;
 type WebPushUserTable = typeof webPushUserTable;
 type SubscriptionDynamoDB = DynamoTypeFrom<typeof subscriptionsTable>;
 
+let userPreferencesTableClient: TableClient<UserPreferencesTable>;
 let subscriptionTableClient: TableClient<SubscriptionsTable>;
 let webPushUserTableClient: TableClient<WebPushUserTable>;
+
+function getUserPreferencesTableClient(tableName?: string): TableClient<UserPreferencesTable> {
+    if (!userPreferencesTableClient) {
+        userPreferencesTableClient = TableClient.build(userPreferencesTable, {
+            client: client,
+            logStatements: true,
+            tableName: tableName ?? DEFAULT_USERPREFS_TABLENAME,
+        });
+    }
+
+    return userPreferencesTableClient;
+}
 
 function getWebPushUserTableClient(tableName?: string): TableClient<WebPushUserTable> {
     if (!webPushUserTableClient) {
@@ -127,17 +154,25 @@ async function getSubscriptionsInDynamoDB(owner: string, name: string) {
 
 async function storeSubscriptionInDynamoDB(owner: string, name: string, uno: string, notification: Subscription, browserID: string): Promise<SubscriptionDynamoDB | undefined> {
     const now = Date.now();
-    const old = await getSubscriptionTableClient(process.env.SUBSCRIPTIONS_TABLE_NAME).query(
-        {
-            owner: owner,
-            name: (sortKey) => sortKey.eq(name),
-        },
-        {
-            filter: (compare) => compare().browserID.eq(browserID),
-        },
-    );
+    let found = false;
 
-    if (old.member.length > 0) {
+    try {
+        await getSubscriptionTableClient(process.env.SUBSCRIPTIONS_TABLE_NAME).query(
+            {
+                owner: owner,
+                name: (sortKey) => sortKey.eq(name),
+            },
+            {
+                filter: (compare) => compare().browserID.eq(browserID),
+            },
+        );
+
+        found = true;
+    } catch {
+        found = false;
+    }
+
+    if (found) {
         const result = await getSubscriptionTableClient(process.env.SUBSCRIPTIONS_TABLE_NAME).update({
             key: {
                 name: name,
@@ -229,7 +264,13 @@ async function listSubscriptions(identity: Identify, serviceDefinition: Register
     return {
         statusCode: 200,
         body: JSON.stringify({
-            subscriptions: subscriptions,
+            response: {
+                subscriptions: subscriptions,
+                status: {
+                    code: 0,
+                    reason: 'OK',
+                },
+            },
         }),
     };
 }
@@ -243,7 +284,13 @@ async function registerNotification(identifier: string, notification: Subscripti
     return {
         statusCode: 200,
         body: JSON.stringify({
-            uno: notificationIdentifier,
+            response: {
+                uno: notificationIdentifier,
+                status: {
+                    code: 0,
+                    reason: 'OK',
+                },
+            },
         }),
     };
 }
@@ -293,7 +340,9 @@ async function sendNotificationToClient(notication: NoticationData, subscription
 }
 
 async function pushNotification(identifier: string, pushData: PostedPushNoticationData): Promise<APIGatewayProxyResult> {
-    console.log(pushData);
+    if (debug) {
+        console.log(pushData);
+    }
 
     let all: Promise<SendResult>[] = [];
 
@@ -322,8 +371,10 @@ async function pushNotification(identifier: string, pushData: PostedPushNoticati
         statusCode: 200,
         body: JSON.stringify({
             response: {
-                status: 0,
-                message: 'processing',
+                status: {
+                    code: 0,
+                    reason: 'Processing',
+                },
             },
         }),
     };
@@ -333,14 +384,27 @@ async function deleteNotification(identifier: string, identity: Identify, servic
     const notificationCenter = getNotificationCenter(identity);
     const notificationIdentifier = await notificationCenter.deleteSubscription(identifier, serviceDefinition.name);
 
-    await deleteSubscriptionInDynamoDB(identity.principalId, identifier, browserID);
+    try {
+        await deleteSubscriptionInDynamoDB(identity.principalId, identifier, browserID);
 
-    return {
-        statusCode: 200,
-        body: JSON.stringify({
-            uno: notificationIdentifier,
-        }),
-    };
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                response: {
+                    uno: notificationIdentifier,
+                    status: {
+                        code: 0,
+                        reason: 'OK',
+                    },
+                },
+            }),
+        };
+    } catch (e) {
+        return {
+            statusCode: 404,
+            body: 'Subscription not found',
+        };
+    }
 }
 
 async function defaultHandler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
@@ -360,21 +424,30 @@ function handleError(err: any) {
         return {
             statusCode: err.code,
             body: JSON.stringify({
-                message: err.message,
+                error: {
+                    message: err.message,
+                    code: err.code,
+                },
             }),
         };
     } else if (err instanceof HttpError) {
         return {
             statusCode: err.statusCode,
             body: JSON.stringify({
-                message: err.message,
+                error: {
+                    message: err.message,
+                    code: err.statusCode,
+                },
             }),
         };
     } else {
         return {
             statusCode: 500,
             body: JSON.stringify({
-                message: err.message ? err.message : err.toString(),
+                error: {
+                    message: err.message ? err.message : err.toString(),
+                    code: 500,
+                },
             }),
         };
     }
@@ -443,30 +516,128 @@ async function updateWebPushUserKey(principalId: string, browserID: string, data
     const now = Date.now();
     const webpushTable = getWebPushUserTableClient(process.env.WEBPUSH_TABLE_NAME);
 
-    await webpushTable.update({
-        key: {
-            owner: principalId,
-            browserID: browserID,
-        },
-        updates: {
-            publicKey: data.apiKeys.publicKey,
-            privateKey: data.apiKeys.privateKey,
-            endpoint: data.subscription.endpoint,
-            p256dh: data.subscription.keys.p256dh,
-            auth: data.subscription.keys.auth,
-            updated: now,
-        },
-    });
-
-    return {
-        statusCode: 200,
-        body: JSON.stringify({
-            response: {
-                message: 'OK',
-                status: 0,
+    try {
+        await webpushTable.update({
+            key: {
+                owner: principalId,
+                browserID: browserID,
             },
-        }),
-    };
+            updates: {
+                publicKey: data.apiKeys.publicKey,
+                privateKey: data.apiKeys.privateKey,
+                endpoint: data.subscription.endpoint,
+                p256dh: data.subscription.keys.p256dh,
+                auth: data.subscription.keys.auth,
+                updated: now,
+            },
+        });
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                response: {
+                    message: 'OK',
+                    status: 0,
+                },
+            }),
+        };
+    } catch (e: any) {
+        return {
+            statusCode: 404,
+            body: JSON.stringify({
+                error: {
+                    message: e?.message ?? 'Not found',
+                    code: 404,
+                },
+            }),
+        };
+    }
+}
+
+async function storeUserPreferences(principalId: string, name: string, prefs: any): Promise<APIGatewayProxyResult> {
+    const userPreferencesTable = getUserPreferencesTableClient(process.env.USERPREFS_TABLENAME);
+
+    try {
+        await userPreferencesTable.put(
+            {
+                owner: principalId,
+                name: name,
+                preferences: JSON.stringify(prefs),
+                updated: Date.now(),
+            },
+            {
+                returnValues: 'ALL_OLD',
+            },
+        );
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                response: {
+                    status: {
+                        code: 0,
+                        reason: 'OK',
+                    },
+                },
+            }),
+        };
+    } catch (e: any) {
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                error: {
+                    message: e?.message ?? 'Internal error',
+                    code: e?.statusCode ?? 500,
+                },
+            }),
+        };
+    }
+}
+
+async function getUserPreferences(principalId: string, name: string): Promise<APIGatewayProxyResult> {
+    const userPreferencesTable = getUserPreferencesTableClient(process.env.USERPREFS_TABLENAME);
+
+    try {
+        const prefs = await userPreferencesTable.get({
+            owner: principalId,
+            name: name,
+        });
+
+        if (prefs.item) {
+            return {
+                statusCode: 200,
+                body: JSON.stringify({
+                    response: {
+                        preferences: JSON.parse(prefs.item.preferences),
+                        status: {
+                            code: 0,
+                            reason: 'OK',
+                        },
+                    },
+                }),
+            };
+        }
+
+        return {
+            statusCode: 404,
+            body: JSON.stringify({
+                error: {
+                    message: 'Not found',
+                    code: 404,
+                },
+            }),
+        };
+    } catch (e: any) {
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                error: {
+                    message: e?.message ?? 'Internal error',
+                    code: e?.statusCode ?? 500,
+                },
+            }),
+        };
+    }
 }
 
 /**
@@ -480,7 +651,7 @@ async function updateWebPushUserKey(principalId: string, browserID: string, data
  */
 export const apiHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     let response: Promise<APIGatewayProxyResult>;
-    
+
     debug = process.env.DEBUG_LAMBDA ? process.env.DEBUG_LAMBDA === 'true' : false;
 
     if (debug) {
@@ -493,40 +664,72 @@ export const apiHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewa
         if (authorizer?.principalId && authorizer?.accessToken) {
             const serviceIdentifier = getServiceDefinition(event.queryStringParameters);
             const browserID = event.queryStringParameters?.browserID ?? ALL_BROWSERS;
+            const method = event.httpMethod.toUpperCase();
             const identity = {
                 principalId: authorizer?.principalId,
                 accessToken: authorizer?.accessToken,
+                refreshToken: authorizer?.refreshToken,
+                tokenExpires: authorizer?.tokenExpires,
+                authType: authorizer?.authType,
             };
 
             if (event.resource.startsWith('/webpush')) {
                 if (event.body) {
-                    if (event.httpMethod.toUpperCase() === 'POST') {
+                    if (method === 'POST') {
                         response = storeWebPushUserKey(identity.principalId, browserID, JSON.parse(event.body));
-                    } else {
+                    } else if (method === 'PUT') {
                         response = updateWebPushUserKey(identity.principalId, browserID, JSON.parse(event.body));
+                    } else {
+                        throw new HttpError('Method Not Allowed', 406);
                     }
                 } else {
                     throw new HttpError('Missing parameters to register webpush user key', 400);
                 }
             } else if (event.resource.startsWith('/register')) {
-                if (event.body && event.pathParameters?.identifier) {
+                if (method !== 'POST') {
+                    throw new HttpError('Method Not Allowed', 406);
+                } else if (event.body && event.pathParameters?.identifier) {
                     response = registerNotification(event.pathParameters?.identifier, JSON.parse(event.body), identity, serviceIdentifier, browserID);
                 } else {
                     throw new HttpError('Missing parameters to register subscription', 400);
                 }
             } else if (event.resource.startsWith('/list')) {
-                response = listSubscriptions(identity, serviceIdentifier);
+                if (method !== 'GET') {
+                    throw new HttpError('Method Not Allowed', 406);
+                } else {
+                    response = listSubscriptions(identity, serviceIdentifier);
+                }
             } else if (event.resource.startsWith('/push')) {
-                if (event.body && event.pathParameters?.identifier) {
+                if (method !== 'POST') {
+                    throw new HttpError('Method Not Allowed', 406);
+                } else if (event.body && event.pathParameters?.identifier) {
                     response = pushNotification(event.pathParameters?.identifier, JSON.parse(event.body));
                 } else {
                     throw new HttpError('Missing parameters to push subscription', 400);
                 }
             } else if (event.resource.startsWith('/delete')) {
-                if (event.pathParameters?.identifier) {
+                if (method !== 'DELETE') {
+                    throw new HttpError('Method Not Allowed', 406);
+                } else if (event.pathParameters?.identifier) {
                     response = deleteNotification(event.pathParameters?.identifier, identity, serviceIdentifier, browserID);
                 } else {
                     throw new HttpError('Missing parameters to delete subscription', 400);
+                }
+            } else if (event.resource.startsWith('/preferences')) {
+                if (method === 'POST') {
+                    if (event.body && event.pathParameters?.identifier) {
+                        response = storeUserPreferences(identity.principalId, event.pathParameters?.identifier, JSON.parse(event.body));
+                    } else {
+                        throw new HttpError('Missing parameters', 400);
+                    }
+                } else if (method === 'GET') {
+                    if (event.pathParameters?.identifier) {
+                        response = getUserPreferences(identity.principalId, event.pathParameters?.identifier);
+                    } else {
+                        throw new HttpError('Missing parameters', 400);
+                    }
+                } else {
+                    throw new HttpError('Method Not Allowed', 406);
                 }
             } else {
                 response = defaultHandler(event);

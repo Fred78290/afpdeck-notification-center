@@ -8,26 +8,47 @@ import * as dotenv from 'dotenv';
 import ApiCore from 'afp-apicore-sdk';
 
 const serviceName = 'test-notification-center';
+const DEFAULT_TIMEOUT = 30000;
 
 dotenv.config({ path: __dirname + '/../../configs/.env' });
 
-async function createDynamoDBTable(tableName: string, args: CreateTableCommandInput) {
+const sleep = (waitTimeInMs) => new Promise(resolve => setTimeout(resolve, waitTimeInMs));
+const testPrefs = {
+	sample: 'my preference'
+}
+
+async function createDynamoDBTable(args: CreateTableCommandInput) {
 	const dynamo = new DynamoDB();
 
 	try {
 		await dynamo.describeTable({
-			TableName: tableName,
+			TableName: args.TableName,
 		});
 	} catch(e) {
         await dynamo.createTable(args);
+		await sleep(2000);
 	}
 }
 
 async function createDynamoDBTables() {
 	const webPushTableName = process.env.WEBPUSH_TABLE_NAME ?? 'test-afpdeck-webpush';
     const subscriptionsTableName = process.env.SUBSCRIPTIONS_TABLE_NAME ?? 'test-afpdeck-subscriptions';
+    const userPrefrencesTableName = process.env.USERPREFS_TABLENAME ?? 'test-afpdeck-preferences';
 
-	await createDynamoDBTable(webPushTableName, {
+	await createDynamoDBTable({
+		TableName: userPrefrencesTableName,
+		BillingMode: 'PAY_PER_REQUEST',
+		KeySchema: [
+			{ AttributeName: 'owner', KeyType: 'HASH' },
+			{ AttributeName: 'name', KeyType: 'RANGE' },
+		],
+		AttributeDefinitions: [
+			{ AttributeName: 'owner', AttributeType: 'S' },
+			{ AttributeName: 'name', AttributeType: 'S' },
+		],
+	});
+
+	await createDynamoDBTable({
 		TableName: webPushTableName,
 		BillingMode: 'PAY_PER_REQUEST',
 		KeySchema: [
@@ -40,7 +61,7 @@ async function createDynamoDBTables() {
 		],
 	});
 
-	await createDynamoDBTable(subscriptionsTableName, {
+	await createDynamoDBTable({
 		TableName: subscriptionsTableName,
 		BillingMode: 'PAY_PER_REQUEST',
 		KeySchema: [
@@ -60,8 +81,17 @@ async function deleteDynamoDBTables() {
 	const webPushTableName = process.env.WEBPUSH_TABLE_NAME ?? 'test-afpdeck-webpush';
     const subscriptionsTableName = process.env.SUBSCRIPTIONS_TABLE_NAME ?? 'test-afpdeck-subscriptions';
 
-	await dynamo.deleteTable({TableName: webPushTableName});
-	await dynamo.deleteTable({TableName: subscriptionsTableName});
+	try {
+		await dynamo.deleteTable({TableName: webPushTableName});
+	} catch(e) {
+		console.error(e);
+	}
+
+	try {
+		await dynamo.deleteTable({TableName: subscriptionsTableName});
+	} catch(e) {
+		console.error(e);
+	}
 }
 
 async function buildEvent(method: string, path: string, pathParameters: APIGatewayProxyEventPathParameters | null, queryStringParameters: APIGatewayProxyEventQueryStringParameters | null, body: unknown | null) {
@@ -136,12 +166,14 @@ async function buildEvent(method: string, path: string, pathParameters: APIGatew
 beforeAll(async () => {
 	await createDynamoDBTables();
 	console.log("Create dynamodb tables")
-});
+}, 10000);
 
+/*
 afterAll(async () => {
 	await deleteDynamoDBTables();
 	console.log("Delete dynamodb tables")
 });
+*/
 
 describe('Unit test for api', function () {
 	const servicePathParameters = {
@@ -155,38 +187,70 @@ describe('Unit test for api', function () {
 	};
 
 	it('verifies successful register', async () => {
+		await createDynamoDBTables();
+
 		const event = await buildEvent('POST', `/register/${serviceName}`, servicePathParameters, serviceDefinition, testSubscription);
 		const result = await apiHandler(event);
 
 		console.log(result);
 
 		expect(result.statusCode).toEqual(200);
-	});
+	}, DEFAULT_TIMEOUT);
 
 	it('verifies successful list', async () => {
+		await createDynamoDBTables();
+
 		const event = await buildEvent('GET', '/list', null, serviceDefinition, null);
 		const result = await apiHandler(event);
 
 		console.log(result);
 
 		expect(result.statusCode).toEqual(200);
-	});
+	}, DEFAULT_TIMEOUT);
 
 	it('verifies successful push', async () => {
+		await createDynamoDBTables();
+
 		const event = await buildEvent('POST', `/push/${serviceName}`, servicePathParameters, serviceDefinition, testPush);
 		const result = await apiHandler(event);
 
 		console.log(result);
 
 		expect(result.statusCode).toEqual(200);
-	});
+	}, DEFAULT_TIMEOUT);
 
 	it('verifies successful delete', async () => {
+		await createDynamoDBTables();
+
 		const event = await buildEvent('DELETE', `/delete/${serviceName}`, servicePathParameters, serviceDefinition, null);
+		const result = await apiHandler(event);
+
+		await deleteDynamoDBTables();
+
+		console.log(result);
+
+		expect(result.statusCode).toEqual(200);
+	}, DEFAULT_TIMEOUT);
+
+	it('verifies successful store user preferences', async () => {
+		await createDynamoDBTables();
+
+		const event = await buildEvent('POST', `/preferences/${serviceName}`, servicePathParameters, null, testPrefs);
 		const result = await apiHandler(event);
 
 		console.log(result);
 
 		expect(result.statusCode).toEqual(200);
-	});
+	}, DEFAULT_TIMEOUT);
+
+	it('verifies successful get user preferences', async () => {
+		await createDynamoDBTables();
+
+		const event = await buildEvent('GET', `/preferences/${serviceName}`, servicePathParameters, null, null);
+		const result = await apiHandler(event);
+
+		console.log(result);
+
+		expect(result.statusCode).toEqual(200);
+	}, DEFAULT_TIMEOUT);
 });
