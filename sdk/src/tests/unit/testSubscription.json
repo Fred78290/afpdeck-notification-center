@@ -7,7 +7,7 @@
         "AND": [
             {
                 "name": "product",
-                "value": "news"
+                "value": "unknown"
             },
             {
                 "name": "urgency",

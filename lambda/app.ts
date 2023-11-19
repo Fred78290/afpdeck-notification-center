@@ -5,16 +5,18 @@ import { APIGatewayProxyEvent, APIGatewayProxyEventQueryStringParameters, APIGat
 import { Subscription, AuthType, ServiceType, RegisterService, PostedPushNoticationData, NoticationData, NoticationUserPayload } from 'afp-apicore-sdk/dist/types';
 import { DynamoDB } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb';
-import { defineTable, DynamoTypeFrom, TableClient } from '@hexlabs/dynamo-ts';
+import { defineTable, DynamoTypeFrom, TableClient, QuerierReturn } from '@hexlabs/dynamo-ts';
 import webpush, { VapidKeys, PushSubscription, SendResult } from 'web-push';
 
-const AFPDECK_NOTIFICATIONCENTER_SERVICE = 'afpdeck';
+const AFPDECK_NOTIFICATIONCENTER_SERVICE = 'afpdeck-user-service';
+const AFPDECK_NOTIFICATIONCENTER_SHARED_SERVICE = 'afpdeck-shared-service';
 const ALL_BROWSERS = 'all';
 const DEFAULT_WEBPUSH_TABLENAME = 'afpdeck-webpush';
 const DEFAULT_SUBSCRIPTIONS_TABLENAME = 'afpdeck-subscriptions';
 const DEFAULT_USERPREFS_TABLENAME = 'afpdeck-preferences';
 
 let debug = process.env.DEBUG_LAMBDA ? process.env.DEBUG_LAMBDA === 'true' : false;
+let useSharedService = process.env.APICORE_USE_SHAREDSERVICE ? process.env.APICORE_USE_SHAREDSERVICE === 'true' : false;
 
 interface Identify {
     principalId: string;
@@ -236,22 +238,42 @@ function getNotificationCenter(identity: Identify) {
         tokenExpires: identity.tokenExpires ? identity.tokenExpires : Date.now() + 1000 * 3600,
     };
 
-    return apicore.createNotificationCenter();
+    return apicore.createNotificationCenter(process.env.APICORE_SERVICE_USERNAME, process.env.APICORE_SERVICE_PASSWORD);
 }
 
 async function checkIfServiceIsRegistered(identity: Identify, serviceDefinition: RegisterService) {
     const notificationCenter = getNotificationCenter(identity);
-    const services = await notificationCenter.listServices();
-    const service = services?.find((s) => s.serviceName === serviceDefinition.name);
 
-    if (!service) {
-        const serviceName = await notificationCenter.registerService(serviceDefinition);
+    if (useSharedService) {
+        if (process.env.APICORE_CLIENT_ID) {
+            const services = await notificationCenter.listSharedServices(process.env.APICORE_CLIENT_ID, identity.principalId);
+            const service = services?.find((s) => s.serviceName === serviceDefinition.name);
 
-        if (debug) {
-            console.info(`Created service: ${serviceDefinition.name}, uno: ${serviceName}, for user: ${identity.principalId}`);
+            if (!service) {
+                try {
+                    const serviceName = await notificationCenter.registerSharedService(serviceDefinition);
+
+                    if (debug) {
+                        console.info(`Created shared service: ${serviceDefinition.name}, uno: ${serviceName}`);
+                    }
+                } catch (e) {
+                    console.info(`Shared service: ${serviceDefinition.name}, already exists`);
+                }
+            }
         }
-    } else if (debug) {
-        console.info(`Created service: ${serviceDefinition.name}, uno: ${service.serviceIdentifier}, for user: ${identity.principalId}`);
+    } else {
+        const services = await notificationCenter.listServices();
+        const service = services?.find((s) => s.serviceName === serviceDefinition.name);
+
+        if (!service) {
+            const serviceName = await notificationCenter.registerService(serviceDefinition);
+
+            if (debug) {
+                console.info(`Created service: ${serviceDefinition.name}, uno: ${serviceName}, for user: ${identity.principalId}`);
+            }
+        } else if (debug) {
+            console.info(`Created service: ${serviceDefinition.name}, uno: ${service.serviceIdentifier}, for user: ${identity.principalId}`);
+        }
     }
 
     return notificationCenter;
@@ -295,48 +317,145 @@ async function registerNotification(identifier: string, notification: Subscripti
     };
 }
 
-async function sendNotificationToClient(notication: NoticationData, subscription: NoticationUserPayload): Promise<Promise<webpush.SendResult>[]> {
+function sendNotificationToClientSync(notication: NoticationData, subscription: NoticationUserPayload): Promise<Promise<SendResult>[]> {
+    return new Promise((resolve, reject) => {
+        getSubscriptionsInDynamoDB(subscription.userID, subscription.name).then((subItems) => {
+            const result: Promise<SendResult>[] = [];
+            const userPushKeys: Promise<QuerierReturn<WebPushUserTable>>[] = [];
+
+            for (const subItem of subItems) {
+                userPushKeys.push(findPushKeyForIdentity(subscription.userID, subItem.browserID));
+            }
+
+            Promise.allSettled(userPushKeys).then((settlements) => {
+                settlements.forEach((settlement) => {
+                    if (settlement.status === 'fulfilled') {
+                        const userPushKey = settlement.value;
+
+                        if (userPushKey.count && userPushKey.count > 0) {
+                            const datas = {
+                                name: subscription.name,
+                                uno: subscription.identifier,
+                                isFree: subscription.isFree,
+                                documentUrl: subscription.documentUrl,
+                                thumbnailUrl: subscription.thumbnailUrl,
+                                payload: notication,
+                            };
+
+                            userPushKey.member.forEach((m) => {
+                                const push = webpush.sendNotification(
+                                    {
+                                        endpoint: m.endpoint,
+                                        keys: {
+                                            auth: m.auth,
+                                            p256dh: m.p256dh,
+                                        },
+                                    },
+                                    JSON.stringify(datas),
+                                    {
+                                        vapidDetails: {
+                                            subject: m.browserID,
+                                            privateKey: m.privateKey,
+                                            publicKey: m.publicKey,
+                                        },
+                                    },
+                                );
+
+                                result.push(push);
+                            });
+                        }
+                    } else {
+                        console.error(settlement.reason);
+                    }
+                });
+
+                resolve(result);
+            });
+        });
+    });
+}
+
+async function sendNotificationToClient(notication: NoticationData, subscription: NoticationUserPayload): Promise<Promise<SendResult>[]> {
     const subItems = await getSubscriptionsInDynamoDB(subscription.userID, subscription.name);
     const result: Promise<SendResult>[] = [];
 
     for (const subItem of subItems) {
-        const userPushKey = await findPushKeyForIdentity(subscription.userID, subItem.browserID);
+        try {
+            const userPushKey = await findPushKeyForIdentity(subscription.userID, subItem.browserID);
 
-        if (userPushKey.count && userPushKey.count > 0) {
-            const datas = {
-                name: subscription.name,
-                uno: subscription.identifier,
-                isFree: subscription.isFree,
-                documentUrl: subscription.documentUrl,
-                thumbnailUrl: subscription.thumbnailUrl,
-                payload: notication,
-            };
+            if (userPushKey.count && userPushKey.count > 0) {
+                const datas = {
+                    name: subscription.name,
+                    uno: subscription.identifier,
+                    isFree: subscription.isFree,
+                    documentUrl: subscription.documentUrl,
+                    thumbnailUrl: subscription.thumbnailUrl,
+                    payload: notication,
+                };
 
-            userPushKey.member.forEach((m) => {
-                const push = webpush.sendNotification(
-                    {
-                        endpoint: m.endpoint,
-                        keys: {
-                            auth: m.auth,
-                            p256dh: m.p256dh,
+                userPushKey.member.forEach((m) => {
+                    const push = webpush.sendNotification(
+                        {
+                            endpoint: m.endpoint,
+                            keys: {
+                                auth: m.auth,
+                                p256dh: m.p256dh,
+                            },
                         },
-                    },
-                    JSON.stringify(datas),
-                    {
-                        vapidDetails: {
-                            subject: m.browserID,
-                            privateKey: m.privateKey,
-                            publicKey: m.publicKey,
+                        JSON.stringify(datas),
+                        {
+                            vapidDetails: {
+                                subject: m.browserID,
+                                privateKey: m.privateKey,
+                                publicKey: m.publicKey,
+                            },
                         },
-                    },
-                );
+                    );
 
-                result.push(push);
-            });
+                    result.push(push);
+                });
+            }
+        } catch (e) {
+            console.error('Browser registration: %s not found for user: %s, reason: %s', subItem.browserID, subscription.userID, e);
         }
     }
 
     return result;
+}
+
+async function collectSubscriptions(identifier: string, pushData: PostedPushNoticationData) {
+    return new Promise((resolve) => {
+        let all: Promise<Promise<SendResult>[]>[] = [];
+
+        for (const payload of pushData.payload) {
+            const datas: any = {};
+            const notif: any = payload;
+
+            Object.keys(payload).forEach((key) => {
+                if (key !== 'subscriptions') datas[key] = notif[key];
+            });
+
+            for (const subscription of payload.subscriptions) {
+                all = all.concat(sendNotificationToClient(datas, subscription));
+            }
+        }
+
+        Promise.allSettled(all).then((returnValues) => {
+            const all: Promise<SendResult>[] = [];
+
+            returnValues.forEach((value) => {
+                if (value.status === 'fulfilled') {
+                    value.value.forEach((v) => {
+                        all.push(v);
+                    });
+                }
+            });
+
+            Promise.allSettled(all).then((returnValues) => {
+                resolve(returnValues);
+            });
+        });
+    });
 }
 
 async function pushNotification(identifier: string, pushData: PostedPushNoticationData): Promise<APIGatewayProxyResult> {
@@ -344,28 +463,9 @@ async function pushNotification(identifier: string, pushData: PostedPushNoticati
         console.log(pushData);
     }
 
-    let all: Promise<SendResult>[] = [];
-
-    for (const payload of pushData.payload) {
-        const datas: any = {};
-        const notif: any = payload;
-
-        Object.keys(payload).forEach((key) => {
-            if (key !== 'subscriptions') datas[key] = notif[key];
-        });
-
-        for (const subscription of payload.subscriptions) {
-            all = all.concat(await sendNotificationToClient(datas, subscription));
-        }
-    }
-
-    Promise.all(all)
-        .then(() => {
-            console.info(`done: ${JSON.stringify(pushData)}`);
-        })
-        .catch((e) => {
-            console.error(`${e}: ${JSON.stringify(pushData)}`);
-        });
+    collectSubscriptions(identifier, pushData).then(() => {
+        console.info(`done: ${JSON.stringify(pushData)}`);
+    });
 
     return {
         statusCode: 200,
@@ -382,7 +482,7 @@ async function pushNotification(identifier: string, pushData: PostedPushNoticati
 
 async function deleteNotification(identifier: string, identity: Identify, serviceDefinition: RegisterService, browserID: string): Promise<APIGatewayProxyResult> {
     const notificationCenter = getNotificationCenter(identity);
-    const notificationIdentifier = await notificationCenter.deleteSubscription(identifier, serviceDefinition.name);
+    const notificationIdentifier = await notificationCenter.deleteSubscription(identifier);
 
     try {
         await deleteSubscriptionInDynamoDB(identity.principalId, identifier, browserID);
@@ -454,7 +554,7 @@ function handleError(err: any) {
 }
 
 function getServiceDefinition(queryStringParameters: APIGatewayProxyEventQueryStringParameters | null): RegisterService {
-    if (queryStringParameters) {
+    if (!useSharedService && queryStringParameters) {
         if (queryStringParameters.serviceName && queryStringParameters.serviceType && queryStringParameters.serviceData) {
             return {
                 name: queryStringParameters.serviceName,
@@ -466,7 +566,7 @@ function getServiceDefinition(queryStringParameters: APIGatewayProxyEventQuerySt
 
     if (process.env.AFPDECK_PUSH_URL && process.env.APICORE_PUSH_USERNAME && process.env.APICORE_PUSH_PASSWORD) {
         return {
-            name: AFPDECK_NOTIFICATIONCENTER_SERVICE,
+            name: useSharedService ? AFPDECK_NOTIFICATIONCENTER_SHARED_SERVICE : AFPDECK_NOTIFICATIONCENTER_SERVICE,
             type: 'rest',
             datas: {
                 href: process.env.AFPDECK_PUSH_URL,
@@ -653,6 +753,7 @@ export const apiHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewa
     let response: Promise<APIGatewayProxyResult>;
 
     debug = process.env.DEBUG_LAMBDA ? process.env.DEBUG_LAMBDA === 'true' : false;
+    useSharedService = process.env.APICORE_USE_SHAREDSERVICE ? process.env.APICORE_USE_SHAREDSERVICE === 'true' : false;
 
     if (debug) {
         console.log(event);

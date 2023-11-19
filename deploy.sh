@@ -40,6 +40,9 @@ ParameterKey=ApiCoreClientSecret,ParameterValue=${APICORE_CLIENT_SECRET}
 ParameterKey=ApiCoreBaseURL,ParameterValue=${APICORE_BASE_URL}
 ParameterKey=ApiCorePushUserName,ParameterValue=${APICORE_USERNAME}
 ParameterKey=ApiCorePushPassword,ParameterValue=${APICORE_PASSWORD}
+ParameterKey=ApiCoreServiceUserName,ParameterValue=${APICORE_SERVICE_USERNAME}
+ParameterKey=ApiCoreServicePassword,ParameterValue=${APICORE_SERVICE_PASSWORD}
+ParameterKey=ApiCoreUseSharedService,ParameterValue=${APICORE_USE_SHAREDSERVICE}
 ParameterKey=AfpDeckPushUrl,ParameterValue=https://afpdeck-notification-center.${DOMAIN_NAME}/api/push/
 ParameterKey=DebugLambda,ParameterValue=${DEBUG_LAMBDA}
 EOF

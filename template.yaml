@@ -45,6 +45,13 @@ Parameters:
     Type: String
   ApiCorePushPassword:
     Type: String
+  ApiCoreServiceUserName:
+    Type: String
+  ApiCoreServicePassword:
+    Type: String
+  ApiCoreUseSharedService:
+    Type: String
+    Default: 'false'
   AfpDeckPushUrl:
     Type: String
   DebugLambda:
@@ -336,6 +343,9 @@ Resources:
           APICORE_BASE_URL: !Ref ApiCoreBaseURL
           APICORE_PUSH_USERNAME: !Ref ApiCorePushUserName
           APICORE_PUSH_PASSWORD: !Ref ApiCorePushPassword
+          APICORE_SERVICE_USERNAME: !Ref ApiCoreServiceUserName
+          APICORE_SERVICE_PASSWORD: !Ref ApiCoreServicePassword
+          APICORE_USE_SHAREDSERVICE: !Ref ApiCoreUseSharedService
           AFPDECK_PUSH_URL: !Ref AfpDeckPushUrl
           SUBSCRIPTIONS_TABLE_NAME: !Ref PublicApiGatewayName
           WEBPUSH_TABLE_NAME: !Ref SubscriptionsTableName
@@ -425,6 +435,9 @@ Resources:
           APICORE_BASE_URL: !Ref ApiCoreBaseURL
           APICORE_PUSH_USERNAME: !Ref ApiCorePushUserName
           APICORE_PUSH_PASSWORD: !Ref ApiCorePushPassword
+          APICORE_SERVICE_USERNAME: !Ref ApiCoreServiceUserName
+          APICORE_SERVICE_PASSWORD: !Ref ApiCoreServicePassword
+          APICORE_USE_SHAREDSERVICE: !Ref ApiCoreUseSharedService
           AFPDECK_PUSH_URL: !Ref AfpDeckPushUrl
           SUBSCRIPTIONS_TABLE_NAME: !Ref PublicApiGatewayName
           WEBPUSH_TABLE_NAME: !Ref SubscriptionsTableName
