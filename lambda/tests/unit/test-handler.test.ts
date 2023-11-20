@@ -21,7 +21,7 @@ describe('Unit test for app handler', function () {
             type: 'REQUEST',
             httpMethod: 'get',
             methodArn: methodArn,
-            resource: 'abcdef',
+            resource: '/hello',
             path: '/hello',
             headers: {
                 Authorization: authorization,
@@ -142,7 +142,7 @@ describe('Unit test for app handler', function () {
                 resourcePath: '/hello',
                 stage: 'dev',
             },
-            resource: '',
+            resource: '/hello',
             stageVariables: {},
         };
         const result: APIGatewayProxyResult = await apiHandler(event);
