@@ -1,7 +1,7 @@
 /* eslint-disable prettier/prettier */
 import { APIGatewayProxyEvent, APIGatewayProxyEventQueryStringParameters, APIGatewayProxyEventPathParameters } from 'aws-lambda';
 import { apiHandler } from '../../app';
-import { DynamoDB, CreateTableCommandInput } from '@aws-sdk/client-dynamodb';
+import { DynamoDB, DeleteTableCommandOutput, CreateTableCommandInput } from '@aws-sdk/client-dynamodb';
 import testSubscription from './testSubscription.json';
 import testPush from './testPush.json';
 import * as dotenv from 'dotenv';
@@ -13,10 +13,24 @@ const DEFAULT_TIMEOUT = 30000;
 
 dotenv.config({ path: __dirname + '/../../configs/.env' });
 
+const webPushTableName = process.env.WEBPUSH_TABLE_NAME ?? 'test-afpdeck-webpush';
+const subscriptionsTableName = process.env.SUBSCRIPTIONS_TABLE_NAME ?? 'test-afpdeck-subscriptions';
+const userPrefrencesTableName = process.env.USERPREFS_TABLENAME ?? 'test-afpdeck-preferences';
 const sleep = (waitTimeInMs) => new Promise(resolve => setTimeout(resolve, waitTimeInMs));
+
 const testPrefs = {
 	sample: 'my preference'
 }
+
+const servicePathParameters = {
+	identifier: serviceName,
+};
+
+const serviceDefinition = {
+	serviceName: serviceName,
+	serviceType: 'mail',
+	serviceData: JSON.stringify({ address: process.env.APICORE_EMAIL }),
+};
 
 let authenticationToken: Token;
 
@@ -27,77 +41,84 @@ async function createDynamoDBTable(args: CreateTableCommandInput) {
 		await dynamo.describeTable({
 			TableName: args.TableName,
 		});
+		console.log('DynamoDB table: %s, alredy exists', args.TableName)
 	} catch(e) {
+		console.log('Create dynamoDB table: %s', args.TableName)
         await dynamo.createTable(args);
+
+		let tableStatus: string | undefined = 'NOTFOUND';
 
 		do {
 			await sleep(100);
-		} while ((await dynamo.describeTable({TableName: args.TableName})).Table?.TableStatus !== 'ACTIVE');
+
+			try {
+				const table = await dynamo.describeTable({TableName: args.TableName})
+
+				tableStatus = table.Table?.TableStatus
+			} catch(e) {
+
+			}
+
+		} while (tableStatus !== 'ACTIVE');
+
+		console.log('DynamoDB table: %s is ready', args.TableName)
 	}
 }
 
-async function createDynamoDBTables() {
-	const webPushTableName = process.env.WEBPUSH_TABLE_NAME ?? 'test-afpdeck-webpush';
-    const subscriptionsTableName = process.env.SUBSCRIPTIONS_TABLE_NAME ?? 'test-afpdeck-subscriptions';
-    const userPrefrencesTableName = process.env.USERPREFS_TABLENAME ?? 'test-afpdeck-preferences';
+function createDynamoDBTables() {
+	const alls: Promise<void>[] = [];
+	const tables: CreateTableCommandInput[] = [
+		{
+			TableName: userPrefrencesTableName,
+			BillingMode: 'PAY_PER_REQUEST',
+			KeySchema: [
+				{ AttributeName: 'owner', KeyType: 'HASH' },
+				{ AttributeName: 'name', KeyType: 'RANGE' },
+			],
+			AttributeDefinitions: [
+				{ AttributeName: 'owner', AttributeType: 'S' },
+				{ AttributeName: 'name', AttributeType: 'S' },
+			],
+		},
+		{
+			TableName: webPushTableName,
+			BillingMode: 'PAY_PER_REQUEST',
+			KeySchema: [
+				{ AttributeName: 'owner', KeyType: 'HASH' },
+				{ AttributeName: 'browserID', KeyType: 'RANGE' },
+			],
+			AttributeDefinitions: [
+				{ AttributeName: 'owner', AttributeType: 'S' },
+				{ AttributeName: 'browserID', AttributeType: 'S' },
+			],
+		},
+		{
+			TableName: subscriptionsTableName,
+			BillingMode: 'PAY_PER_REQUEST',
+			KeySchema: [
+				{ AttributeName: 'owner', KeyType: 'HASH' },
+				{ AttributeName: 'name', KeyType: 'RANGE' },
+			],
+			AttributeDefinitions: [
+				{ AttributeName: 'owner', AttributeType: 'S' },
+				{ AttributeName: 'name', AttributeType: 'S' },
+			],
+		}
+	]
 
-	await createDynamoDBTable({
-		TableName: userPrefrencesTableName,
-		BillingMode: 'PAY_PER_REQUEST',
-		KeySchema: [
-			{ AttributeName: 'owner', KeyType: 'HASH' },
-			{ AttributeName: 'name', KeyType: 'RANGE' },
-		],
-		AttributeDefinitions: [
-			{ AttributeName: 'owner', AttributeType: 'S' },
-			{ AttributeName: 'name', AttributeType: 'S' },
-		],
-	});
+	tables.forEach(table => alls.push(createDynamoDBTable(table)));
 
-	await createDynamoDBTable({
-		TableName: webPushTableName,
-		BillingMode: 'PAY_PER_REQUEST',
-		KeySchema: [
-			{ AttributeName: 'owner', KeyType: 'HASH' },
-			{ AttributeName: 'browserID', KeyType: 'RANGE' },
-		],
-		AttributeDefinitions: [
-			{ AttributeName: 'owner', AttributeType: 'S' },
-			{ AttributeName: 'browserID', AttributeType: 'S' },
-		],
-	});
-
-	await createDynamoDBTable({
-		TableName: subscriptionsTableName,
-		BillingMode: 'PAY_PER_REQUEST',
-		KeySchema: [
-			{ AttributeName: 'owner', KeyType: 'HASH' },
-			{ AttributeName: 'name', KeyType: 'RANGE' },
-		],
-		AttributeDefinitions: [
-			{ AttributeName: 'owner', AttributeType: 'S' },
-			{ AttributeName: 'name', AttributeType: 'S' },
-		],
-	});
-
+	return Promise.allSettled(alls)
 }
 
-async function deleteDynamoDBTables() {
+function deleteDynamoDBTables() {
 	const dynamo = new DynamoDB();
-	const webPushTableName = process.env.WEBPUSH_TABLE_NAME ?? 'test-afpdeck-webpush';
-    const subscriptionsTableName = process.env.SUBSCRIPTIONS_TABLE_NAME ?? 'test-afpdeck-subscriptions';
+	const names = [webPushTableName, subscriptionsTableName, userPrefrencesTableName];
+	const alls: Promise<DeleteTableCommandOutput>[] = [];
 
-	try {
-		await dynamo.deleteTable({TableName: webPushTableName});
-	} catch(e) {
-		console.error(e);
-	}
+	names.forEach(name => alls.push(dynamo.deleteTable({TableName: name})))
 
-	try {
-		await dynamo.deleteTable({TableName: subscriptionsTableName});
-	} catch(e) {
-		console.error(e);
-	}
+	return Promise.allSettled(alls);
 }
 
 function buildEvent(method: string, path: string, pathParameters: APIGatewayProxyEventPathParameters | null, queryStringParameters: APIGatewayProxyEventQueryStringParameters | null, body: unknown | null) {
@@ -175,7 +196,14 @@ beforeAll((done) => {
 
 		console.log("Will create dynamodb tables")
 
-		createDynamoDBTables().then(() => {
+		createDynamoDBTables().then((values) => {
+			values.forEach(v => {
+				if (v.status === 'rejected') {
+					console.error(v.reason)
+					done(v.reason)
+				}
+			})
+
 			console.log("Did create dynamodb tables")
 			done();
 		}).catch((e) => {
@@ -187,7 +215,7 @@ beforeAll((done) => {
 		done(e);
 	});
 
-}, 10000);
+}, 60000);
 
 
 afterAll((done) => {
@@ -201,16 +229,6 @@ afterAll((done) => {
 });
 
 describe('Unit test for api', function () {
-	const servicePathParameters = {
-		identifier: serviceName,
-	};
-
-	const serviceDefinition = {
-		serviceName: serviceName,
-		serviceType: 'mail',
-		serviceData: JSON.stringify({ address: process.env.APICORE_EMAIL }),
-	};
-
 	it('verifies successful register', async () => {
 		const event = buildEvent('POST', `/register/${serviceName}`, servicePathParameters, serviceDefinition, testSubscription);
 		const result = await apiHandler(event);
