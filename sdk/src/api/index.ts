@@ -1,7 +1,7 @@
 import ApiCore from 'afp-apicore-sdk'
 import { Subscription, RegisteredSubscription } from 'afp-apicore-sdk/dist/types'
-import { WebPushUser } from '../../../lambda/app'
-import { get, del, post, put } from '../utils/request'
+import { WebPushUser, ServiceDefinition } from '../../../lambda/app'
+import { RequestParams, get, del, post, put } from '../utils/request'
 import fingerprint from '@fingerprintjs/fingerprintjs'
 
 interface CommonResponse {
@@ -57,6 +57,22 @@ export default class AfpDeckNotificationCenter {
         return this.browserID
     }
 
+    private buildParams (browserID: string, serviceDefinition?: ServiceDefinition): RequestParams {
+        if (serviceDefinition) {
+            return {
+                browserID: browserID,
+                shared: serviceDefinition.useSharedService,
+                serviceName: serviceDefinition.definition.name,
+                serviceType: serviceDefinition.definition.type,
+                serviceData: JSON.stringify(serviceDefinition.definition.datas)
+            }
+        }
+
+        return {
+            browserID: browserID
+        }
+    }
+
     public async storeWebPushUserKey (infos: WebPushUser) {
         await this.apicore.authenticate()
         const browserID = await this.getBrowserID()
@@ -77,51 +93,43 @@ export default class AfpDeckNotificationCenter {
 
         const data: CommonResponse = await put(`${this.baseUrl}/api/webpush`, infos, {
             headers: this.apicore.authorizationBearerHeaders,
-            params: {
-                browserID: browserID
-            }
+            params: this.buildParams(browserID)
         })
 
         return data.response
     }
 
-    public async registerNotification (name: string, service: string, notification: Subscription) {
+    public async registerNotification (name: string, service: string, notification: Subscription, serviceDefinition?: ServiceDefinition) {
         await this.apicore.authenticate()
         const browserID = await this.getBrowserID()
 
         const data: CommonResponse = await post(`${this.baseUrl}/api/register/${name}`, notification, {
             headers: this.apicore.authorizationBearerHeaders,
-            params: {
-                browserID: browserID
-            }
+            params: this.buildParams(browserID, serviceDefinition)
         })
 
         return data.response
     }
 
-    public async deleteNotification (name: string) {
+    public async deleteNotification (name: string, serviceDefinition?: ServiceDefinition) {
         await this.apicore.authenticate()
         const browserID = await this.getBrowserID()
 
         const data: CommonResponse = await del(`${this.baseUrl}/api/register/${name}`, {
             headers: this.apicore.authorizationBearerHeaders,
-            params: {
-                browserID: browserID
-            }
+            params: this.buildParams(browserID, serviceDefinition)
         })
 
         return data.response
     }
 
-    public async listSubscriptions () {
+    public async listSubscriptions (serviceDefinition?: ServiceDefinition) {
         await this.apicore.authenticate()
         const browserID = await this.getBrowserID()
 
         const data: ListSubscriptionsResponse = await get(`${this.baseUrl}/api/list`, {
             headers: this.apicore.authorizationBearerHeaders,
-            params: {
-                browserID: browserID
-            }
+            params: this.buildParams(browserID, serviceDefinition)
         })
 
         return data.response.subscriptions
@@ -133,9 +141,7 @@ export default class AfpDeckNotificationCenter {
 
         const data: CommonResponse = await post(`${this.baseUrl}/api/preferences/${name}`, prefs, {
             headers: this.apicore.authorizationBearerHeaders,
-            params: {
-                browserID: browserID
-            }
+            params: this.buildParams(browserID)
         })
 
         return data.response
@@ -147,9 +153,7 @@ export default class AfpDeckNotificationCenter {
 
         const data: UserPreferencesResponse = await get(`${this.baseUrl}/api/preferences/${name}`, {
             headers: this.apicore.authorizationBearerHeaders,
-            params: {
-                browserID: browserID
-            }
+            params: this.buildParams(browserID)
         })
 
         return data.response.preferences

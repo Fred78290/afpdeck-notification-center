@@ -15,8 +15,12 @@ const DEFAULT_WEBPUSH_TABLENAME = 'afpdeck-webpush';
 const DEFAULT_SUBSCRIPTIONS_TABLENAME = 'afpdeck-subscriptions';
 const DEFAULT_USERPREFS_TABLENAME = 'afpdeck-preferences';
 
-let debug = process.env.DEBUG_LAMBDA ? process.env.DEBUG_LAMBDA === 'true' : false;
-let useSharedService = process.env.APICORE_USE_SHAREDSERVICE ? process.env.APICORE_USE_SHAREDSERVICE === 'true' : false;
+let debug = false;
+
+export interface ServiceDefinition {
+    definition: RegisterService;
+    useSharedService: boolean;
+}
 
 interface Identify {
     principalId: string;
@@ -241,45 +245,45 @@ function getNotificationCenter(identity: Identify) {
     return apicore.createNotificationCenter(process.env.APICORE_SERVICE_USERNAME, process.env.APICORE_SERVICE_PASSWORD);
 }
 
-async function checkIfServiceIsRegistered(identity: Identify, serviceDefinition: RegisterService) {
+async function checkIfServiceIsRegistered(identity: Identify, serviceDefinition: ServiceDefinition) {
     const notificationCenter = getNotificationCenter(identity);
 
-    if (useSharedService) {
+    if (serviceDefinition.useSharedService) {
         if (process.env.APICORE_CLIENT_ID) {
             const services = await notificationCenter.listSharedServices(process.env.APICORE_CLIENT_ID, identity.principalId);
-            const service = services?.find((s) => s.serviceName === serviceDefinition.name);
+            const service = services?.find((s) => s.serviceName === serviceDefinition.definition.name);
 
             if (!service) {
                 try {
-                    const serviceName = await notificationCenter.registerSharedService(serviceDefinition);
+                    const serviceName = await notificationCenter.registerSharedService(serviceDefinition.definition);
 
                     if (debug) {
-                        console.info(`Created shared service: ${serviceDefinition.name}, uno: ${serviceName}`);
+                        console.info(`Created shared service: ${serviceDefinition.definition.name}, uno: ${serviceName}`);
                     }
                 } catch (e) {
-                    console.info(`Shared service: ${serviceDefinition.name}, already exists`);
+                    console.info(`Shared service: ${serviceDefinition.definition.name}, already exists`);
                 }
             }
         }
     } else {
         const services = await notificationCenter.listServices();
-        const service = services?.find((s) => s.serviceName === serviceDefinition.name);
+        const service = services?.find((s) => s.serviceName === serviceDefinition.definition.name);
 
         if (!service) {
-            const serviceName = await notificationCenter.registerService(serviceDefinition);
+            const serviceName = await notificationCenter.registerService(serviceDefinition.definition);
 
             if (debug) {
-                console.info(`Created service: ${serviceDefinition.name}, uno: ${serviceName}, for user: ${identity.principalId}`);
+                console.info(`Created service: ${serviceDefinition.definition.name}, uno: ${serviceName}, for user: ${identity.principalId}`);
             }
         } else if (debug) {
-            console.info(`Created service: ${serviceDefinition.name}, uno: ${service.serviceIdentifier}, for user: ${identity.principalId}`);
+            console.info(`Created service: ${serviceDefinition.definition.name}, uno: ${service.serviceIdentifier}, for user: ${identity.principalId}`);
         }
     }
 
     return notificationCenter;
 }
 
-async function listSubscriptions(identity: Identify, serviceDefinition: RegisterService): Promise<APIGatewayProxyResult> {
+async function listSubscriptions(identity: Identify, serviceDefinition: ServiceDefinition): Promise<APIGatewayProxyResult> {
     const notificationCenter = await checkIfServiceIsRegistered(identity, serviceDefinition);
     const subscriptions = await notificationCenter.listSubscriptions();
 
@@ -297,9 +301,9 @@ async function listSubscriptions(identity: Identify, serviceDefinition: Register
     };
 }
 
-async function registerNotification(identifier: string, notification: Subscription, identity: Identify, serviceDefinition: RegisterService, browserID: string): Promise<APIGatewayProxyResult> {
+async function registerNotification(identifier: string, notification: Subscription, identity: Identify, serviceDefinition: ServiceDefinition, browserID: string): Promise<APIGatewayProxyResult> {
     const notificationCenter = await checkIfServiceIsRegistered(identity, serviceDefinition);
-    const notificationIdentifier = await notificationCenter.addSubscription(identifier, serviceDefinition.name, notification);
+    const notificationIdentifier = await notificationCenter.addSubscription(identifier, serviceDefinition.definition.name, notification);
 
     await storeSubscriptionInDynamoDB(identity.principalId, identifier, notificationIdentifier, notification, browserID);
 
@@ -423,7 +427,7 @@ async function sendNotificationToClient(notication: NoticationData, subscription
     return result;
 }
 
-async function collectSubscriptions(identifier: string, pushData: PostedPushNoticationData) {
+async function collectSubscriptions(pushData: PostedPushNoticationData) {
     return new Promise((resolve) => {
         let all: Promise<Promise<SendResult>[]>[] = [];
 
@@ -458,12 +462,12 @@ async function collectSubscriptions(identifier: string, pushData: PostedPushNoti
     });
 }
 
-async function pushNotification(identifier: string, pushData: PostedPushNoticationData): Promise<APIGatewayProxyResult> {
+async function pushNotification(pushData: PostedPushNoticationData): Promise<APIGatewayProxyResult> {
     if (debug) {
         console.log(pushData);
     }
 
-    collectSubscriptions(identifier, pushData).then(() => {
+    collectSubscriptions(pushData).then(() => {
         console.info(`done: ${JSON.stringify(pushData)}`);
     });
 
@@ -480,7 +484,7 @@ async function pushNotification(identifier: string, pushData: PostedPushNoticati
     };
 }
 
-async function deleteNotification(identifier: string, identity: Identify, serviceDefinition: RegisterService, browserID: string): Promise<APIGatewayProxyResult> {
+async function deleteNotification(identifier: string, identity: Identify, serviceDefinition: ServiceDefinition, browserID: string): Promise<APIGatewayProxyResult> {
     const notificationCenter = getNotificationCenter(identity);
     const notificationIdentifier = await notificationCenter.deleteSubscription(identifier);
 
@@ -553,25 +557,33 @@ function handleError(err: any) {
     }
 }
 
-function getServiceDefinition(queryStringParameters: APIGatewayProxyEventQueryStringParameters | null): RegisterService {
-    if (!useSharedService && queryStringParameters) {
+function getServiceDefinition(queryStringParameters: APIGatewayProxyEventQueryStringParameters | null): ServiceDefinition {
+    if (queryStringParameters) {
         if (queryStringParameters.serviceName && queryStringParameters.serviceType && queryStringParameters.serviceData) {
             return {
-                name: queryStringParameters.serviceName,
-                type: queryStringParameters.serviceType as ServiceType,
-                datas: JSON.parse(queryStringParameters.serviceData),
+                useSharedService: parseBoolean(queryStringParameters.shared),
+                definition: {
+                    name: queryStringParameters.serviceName,
+                    type: queryStringParameters.serviceType as ServiceType,
+                    datas: JSON.parse(queryStringParameters.serviceData),
+                },
             };
         }
     }
 
     if (process.env.AFPDECK_PUSH_URL && process.env.APICORE_PUSH_USERNAME && process.env.APICORE_PUSH_PASSWORD) {
+        const useSharedService = parseBoolean(process.env.APICORE_USE_SHAREDSERVICE);
+
         return {
-            name: useSharedService ? AFPDECK_NOTIFICATIONCENTER_SHARED_SERVICE : AFPDECK_NOTIFICATIONCENTER_SERVICE,
-            type: 'rest',
-            datas: {
-                href: process.env.AFPDECK_PUSH_URL,
-                user: process.env.APICORE_PUSH_USERNAME,
-                password: process.env.APICORE_PUSH_PASSWORD,
+            useSharedService: useSharedService,
+            definition: {
+                name: useSharedService ? AFPDECK_NOTIFICATIONCENTER_SHARED_SERVICE : AFPDECK_NOTIFICATIONCENTER_SERVICE,
+                type: 'rest',
+                datas: {
+                    href: process.env.AFPDECK_PUSH_URL,
+                    user: process.env.APICORE_PUSH_USERNAME,
+                    password: process.env.APICORE_PUSH_PASSWORD,
+                },
             },
         };
     }
@@ -740,6 +752,13 @@ async function getUserPreferences(principalId: string, name: string): Promise<AP
     }
 }
 
+function parseBoolean(value?: string, defaultValue: boolean = false) {
+    if (value) {
+        return value.toLowerCase() === 'true';
+    }
+
+    return defaultValue;
+}
 /**
  *
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -752,8 +771,7 @@ async function getUserPreferences(principalId: string, name: string): Promise<AP
 export const apiHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     let response: Promise<APIGatewayProxyResult>;
 
-    debug = process.env.DEBUG_LAMBDA ? process.env.DEBUG_LAMBDA === 'true' : false;
-    useSharedService = process.env.APICORE_USE_SHAREDSERVICE ? process.env.APICORE_USE_SHAREDSERVICE === 'true' : false;
+    debug = parseBoolean(event.queryStringParameters?.debug) || parseBoolean(process.env.DEBUG_LAMBDA);
 
     if (debug) {
         console.log(event);
@@ -763,77 +781,80 @@ export const apiHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewa
         const authorizer = event.requestContext.authorizer;
 
         if (authorizer?.principalId && authorizer?.accessToken) {
-            const serviceIdentifier = getServiceDefinition(event.queryStringParameters);
-            const browserID = event.queryStringParameters?.browserID ?? ALL_BROWSERS;
             const method = event.httpMethod.toUpperCase();
-            const identity = {
-                principalId: authorizer?.principalId,
-                accessToken: authorizer?.accessToken,
-                refreshToken: authorizer?.refreshToken,
-                tokenExpires: authorizer?.tokenExpires,
-                authType: authorizer?.authType,
-            };
 
-            if (event.resource.startsWith('/webpush')) {
-                if (event.body) {
+            if (event.resource.startsWith('/push')) {
+                if (method !== 'POST') {
+                    throw new HttpError('Method Not Allowed', 406);
+                } else if (event.body) {
+                    response = pushNotification(JSON.parse(event.body));
+                } else {
+                    throw new HttpError('Missing parameters to push subscription', 400);
+                }
+            } else {
+                const serviceIdentifier = getServiceDefinition(event.queryStringParameters);
+                const browserID = event.queryStringParameters?.browserID ?? ALL_BROWSERS;
+                const identity = {
+                    principalId: authorizer?.principalId,
+                    accessToken: authorizer?.accessToken,
+                    refreshToken: authorizer?.refreshToken,
+                    tokenExpires: authorizer?.tokenExpires,
+                    authType: authorizer?.authType,
+                };
+
+                if (event.resource.startsWith('/webpush')) {
+                    if (event.body) {
+                        if (method === 'POST') {
+                            response = storeWebPushUserKey(identity.principalId, browserID, JSON.parse(event.body));
+                        } else if (method === 'PUT') {
+                            response = updateWebPushUserKey(identity.principalId, browserID, JSON.parse(event.body));
+                        } else {
+                            throw new HttpError('Method Not Allowed', 406);
+                        }
+                    } else {
+                        throw new HttpError('Missing parameters to register webpush user key', 400);
+                    }
+                } else if (event.resource.startsWith('/register')) {
+                    if (method !== 'POST') {
+                        throw new HttpError('Method Not Allowed', 406);
+                    } else if (event.body && event.pathParameters?.identifier) {
+                        response = registerNotification(event.pathParameters?.identifier, JSON.parse(event.body), identity, serviceIdentifier, browserID);
+                    } else {
+                        throw new HttpError('Missing parameters to register subscription', 400);
+                    }
+                } else if (event.resource.startsWith('/list')) {
+                    if (method !== 'GET') {
+                        throw new HttpError('Method Not Allowed', 406);
+                    } else {
+                        response = listSubscriptions(identity, serviceIdentifier);
+                    }
+                } else if (event.resource.startsWith('/delete')) {
+                    if (method !== 'DELETE') {
+                        throw new HttpError('Method Not Allowed', 406);
+                    } else if (event.pathParameters?.identifier) {
+                        response = deleteNotification(event.pathParameters?.identifier, identity, serviceIdentifier, browserID);
+                    } else {
+                        throw new HttpError('Missing parameters to delete subscription', 400);
+                    }
+                } else if (event.resource.startsWith('/preferences')) {
                     if (method === 'POST') {
-                        response = storeWebPushUserKey(identity.principalId, browserID, JSON.parse(event.body));
-                    } else if (method === 'PUT') {
-                        response = updateWebPushUserKey(identity.principalId, browserID, JSON.parse(event.body));
+                        if (event.body && event.pathParameters?.identifier) {
+                            response = storeUserPreferences(identity.principalId, event.pathParameters?.identifier, JSON.parse(event.body));
+                        } else {
+                            throw new HttpError('Missing parameters', 400);
+                        }
+                    } else if (method === 'GET') {
+                        if (event.pathParameters?.identifier) {
+                            response = getUserPreferences(identity.principalId, event.pathParameters?.identifier);
+                        } else {
+                            throw new HttpError('Missing parameters', 400);
+                        }
                     } else {
                         throw new HttpError('Method Not Allowed', 406);
                     }
                 } else {
-                    throw new HttpError('Missing parameters to register webpush user key', 400);
+                    response = defaultHandler(event);
                 }
-            } else if (event.resource.startsWith('/register')) {
-                if (method !== 'POST') {
-                    throw new HttpError('Method Not Allowed', 406);
-                } else if (event.body && event.pathParameters?.identifier) {
-                    response = registerNotification(event.pathParameters?.identifier, JSON.parse(event.body), identity, serviceIdentifier, browserID);
-                } else {
-                    throw new HttpError('Missing parameters to register subscription', 400);
-                }
-            } else if (event.resource.startsWith('/list')) {
-                if (method !== 'GET') {
-                    throw new HttpError('Method Not Allowed', 406);
-                } else {
-                    response = listSubscriptions(identity, serviceIdentifier);
-                }
-            } else if (event.resource.startsWith('/push')) {
-                if (method !== 'POST') {
-                    throw new HttpError('Method Not Allowed', 406);
-                } else if (event.body && event.pathParameters?.identifier) {
-                    response = pushNotification(event.pathParameters?.identifier, JSON.parse(event.body));
-                } else {
-                    throw new HttpError('Missing parameters to push subscription', 400);
-                }
-            } else if (event.resource.startsWith('/delete')) {
-                if (method !== 'DELETE') {
-                    throw new HttpError('Method Not Allowed', 406);
-                } else if (event.pathParameters?.identifier) {
-                    response = deleteNotification(event.pathParameters?.identifier, identity, serviceIdentifier, browserID);
-                } else {
-                    throw new HttpError('Missing parameters to delete subscription', 400);
-                }
-            } else if (event.resource.startsWith('/preferences')) {
-                if (method === 'POST') {
-                    if (event.body && event.pathParameters?.identifier) {
-                        response = storeUserPreferences(identity.principalId, event.pathParameters?.identifier, JSON.parse(event.body));
-                    } else {
-                        throw new HttpError('Missing parameters', 400);
-                    }
-                } else if (method === 'GET') {
-                    if (event.pathParameters?.identifier) {
-                        response = getUserPreferences(identity.principalId, event.pathParameters?.identifier);
-                    } else {
-                        throw new HttpError('Missing parameters', 400);
-                    }
-                } else {
-                    throw new HttpError('Method Not Allowed', 406);
-                }
-            } else {
-                response = defaultHandler(event);
             }
         } else {
             throw new HttpError('Unauthorized', 401);
