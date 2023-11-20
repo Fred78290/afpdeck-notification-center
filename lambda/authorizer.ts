@@ -53,17 +53,31 @@ export const authHandler = async (event: APIGatewayRequestAuthorizerEvent, conte
             if (token.scheme.toLowerCase() === 'basic' && token.token) {
                 const encode: string = Array.isArray(token.token) ? token.token[0] : token.token;
                 const [username, password] = base64decode(encode).split(':', 2);
-                const authToken = await apicore.authenticate({ username, password });
 
-                if (authToken.authType === 'credentials') {
-                    result.principalId = username;
-                    result.policyDocument.Statement[0].Effect = 'Allow';
-                    result.context = {
-                        username: username,
-                        ...authToken,
-                    };
-                } else if (debug) {
-                    console.log(`Not authorized: ${username}`);
+                if (event.resource.startsWith('/push')) {
+                    if (username === process.env.APICORE_PUSH_USERNAME && password === process.env.APICORE_PUSH_PASSWORD) {
+                        result.principalId = username;
+                        result.policyDocument.Statement[0].Effect = 'Allow';
+                        result.context = {
+                            username: username,
+                            authToken: encode,
+                        };
+                    } else {
+                        console.log(`Not authorized: ${username}`);
+                    }
+                } else {
+                    const authToken = await apicore.authenticate({ username, password });
+
+                    if (authToken.authType === 'credentials') {
+                        result.principalId = username;
+                        result.policyDocument.Statement[0].Effect = 'Allow';
+                        result.context = {
+                            username: username,
+                            ...authToken,
+                        };
+                    } else if (debug) {
+                        console.log(`Not authorized: ${username}`);
+                    }
                 }
             } else if (token.scheme.toLowerCase() === 'bearer' && token.token) {
                 const encode: string = Array.isArray(token.token) ? token.token[0] : token.token;
