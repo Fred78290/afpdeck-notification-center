@@ -1,11 +1,12 @@
 /* eslint-disable prettier/prettier */
-import { APIGatewayProxyEvent, APIGatewayProxyResult, APIGatewayProxyEventQueryStringParameters, APIGatewayProxyEventPathParameters } from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyEventQueryStringParameters, APIGatewayProxyEventPathParameters } from 'aws-lambda';
 import { apiHandler } from '../../app';
 import { DynamoDB, CreateTableCommandInput } from '@aws-sdk/client-dynamodb';
 import testSubscription from './testSubscription.json';
 import testPush from './testPush.json';
 import * as dotenv from 'dotenv';
 import ApiCore from 'afp-apicore-sdk';
+import { Token } from 'afp-apicore-sdk/dist/types';
 
 const serviceName = 'test-notification-center';
 const DEFAULT_TIMEOUT = 30000;
@@ -17,6 +18,8 @@ const testPrefs = {
 	sample: 'my preference'
 }
 
+let authenticationToken: Token;
+
 async function createDynamoDBTable(args: CreateTableCommandInput) {
 	const dynamo = new DynamoDB();
 
@@ -26,7 +29,10 @@ async function createDynamoDBTable(args: CreateTableCommandInput) {
 		});
 	} catch(e) {
         await dynamo.createTable(args);
-		await sleep(2000);
+
+		do {
+			await sleep(100);
+		} while ((await dynamo.describeTable({TableName: args.TableName})).Table?.TableStatus !== 'ACTIVE');
 	}
 }
 
@@ -94,18 +100,7 @@ async function deleteDynamoDBTables() {
 	}
 }
 
-async function buildEvent(method: string, path: string, pathParameters: APIGatewayProxyEventPathParameters | null, queryStringParameters: APIGatewayProxyEventQueryStringParameters | null, body: unknown | null) {
-	const apicore = new ApiCore({
-		baseUrl: process.env.APICORE_BASE_URL,
-		clientId: process.env.APICORE_CLIENT_ID,
-		clientSecret: process.env.APICORE_CLIENT_SECRET,
-	});
-
-	const token = await apicore.authenticate({
-		username: process.env.APICORE_USERNAME,
-		password: process.env.APICORE_PASSWORD,
-	});
-
+function buildEvent(method: string, path: string, pathParameters: APIGatewayProxyEventPathParameters | null, queryStringParameters: APIGatewayProxyEventQueryStringParameters | null, body: unknown | null) {
 	const event: APIGatewayProxyEvent = {
 		httpMethod: method,
 		body: body ? JSON.stringify(body) : null,
@@ -122,7 +117,7 @@ async function buildEvent(method: string, path: string, pathParameters: APIGatew
 			authorizer: {
 				principalId: process.env.APICORE_USERNAME,
 				username: process.env.APICORE_USERNAME,
-				...token,
+				...authenticationToken,
 			},
 			httpMethod: 'get',
 			identity: {
@@ -163,17 +158,47 @@ async function buildEvent(method: string, path: string, pathParameters: APIGatew
 	return event;
 }
 
-beforeAll(async () => {
-	await createDynamoDBTables();
-	console.log("Create dynamodb tables")
+beforeAll((done) => {
+	const apicore = new ApiCore({
+		baseUrl: process.env.APICORE_BASE_URL,
+		clientId: process.env.APICORE_CLIENT_ID,
+		clientSecret: process.env.APICORE_CLIENT_SECRET,
+	});
+
+	console.log("Will authenticate")
+
+	apicore.authenticate({
+		username: process.env.APICORE_USERNAME,
+		password: process.env.APICORE_PASSWORD,
+	}).then((token => {
+		authenticationToken = token;
+
+		console.log("Will create dynamodb tables")
+
+		createDynamoDBTables().then(() => {
+			console.log("Did create dynamodb tables")
+			done();
+		}).catch((e) => {
+			console.error(e)
+			done(e);
+		});	
+	})).catch(e => {
+		console.error(e)
+		done(e);
+	});
+
 }, 10000);
 
-/*
-afterAll(async () => {
-	await deleteDynamoDBTables();
-	console.log("Delete dynamodb tables")
+
+afterAll((done) => {
+	deleteDynamoDBTables().then(() => {
+		console.log("Delete dynamodb tables")
+		done();
+	}).catch(e => {
+		console.error(e);
+		done(e)
+	});
 });
-*/
 
 describe('Unit test for api', function () {
 	const servicePathParameters = {
@@ -187,9 +212,7 @@ describe('Unit test for api', function () {
 	};
 
 	it('verifies successful register', async () => {
-		await createDynamoDBTables();
-
-		const event = await buildEvent('POST', `/register/${serviceName}`, servicePathParameters, serviceDefinition, testSubscription);
+		const event = buildEvent('POST', `/register/${serviceName}`, servicePathParameters, serviceDefinition, testSubscription);
 		const result = await apiHandler(event);
 
 		console.log(result);
@@ -198,9 +221,7 @@ describe('Unit test for api', function () {
 	}, DEFAULT_TIMEOUT);
 
 	it('verifies successful list', async () => {
-		await createDynamoDBTables();
-
-		const event = await buildEvent('GET', '/list', null, serviceDefinition, null);
+		const event = buildEvent('GET', '/list', null, serviceDefinition, null);
 		const result = await apiHandler(event);
 
 		console.log(result);
@@ -209,9 +230,7 @@ describe('Unit test for api', function () {
 	}, DEFAULT_TIMEOUT);
 
 	it('verifies successful push', async () => {
-		await createDynamoDBTables();
-
-		const event = await buildEvent('POST', `/push/${serviceName}`, servicePathParameters, serviceDefinition, testPush);
+		const event = buildEvent('POST', `/push/${serviceName}`, servicePathParameters, serviceDefinition, testPush);
 		const result = await apiHandler(event);
 
 		console.log(result);
@@ -220,9 +239,7 @@ describe('Unit test for api', function () {
 	}, DEFAULT_TIMEOUT);
 
 	it('verifies successful delete', async () => {
-		await createDynamoDBTables();
-
-		const event = await buildEvent('DELETE', `/delete/${serviceName}`, servicePathParameters, serviceDefinition, null);
+		const event = buildEvent('DELETE', `/delete/${serviceName}`, servicePathParameters, serviceDefinition, null);
 		const result = await apiHandler(event);
 
 		await deleteDynamoDBTables();
@@ -233,9 +250,7 @@ describe('Unit test for api', function () {
 	}, DEFAULT_TIMEOUT);
 
 	it('verifies successful store user preferences', async () => {
-		await createDynamoDBTables();
-
-		const event = await buildEvent('POST', `/preferences/${serviceName}`, servicePathParameters, null, testPrefs);
+		const event = buildEvent('POST', `/preferences/${serviceName}`, servicePathParameters, null, testPrefs);
 		const result = await apiHandler(event);
 
 		console.log(result);
@@ -244,9 +259,7 @@ describe('Unit test for api', function () {
 	}, DEFAULT_TIMEOUT);
 
 	it('verifies successful get user preferences', async () => {
-		await createDynamoDBTables();
-
-		const event = await buildEvent('GET', `/preferences/${serviceName}`, servicePathParameters, null, null);
+		const event = buildEvent('GET', `/preferences/${serviceName}`, servicePathParameters, null, null);
 		const result = await apiHandler(event);
 
 		console.log(result);
