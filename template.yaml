@@ -395,7 +395,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref AfpDeckNotificationCenterApi
-            Path: /push/{identifier}
+            Path: /push
             Method: POST
         RegisterNotification:
           Type: Api
