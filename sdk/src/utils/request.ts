@@ -5,6 +5,7 @@ import status from 'statuses'
 import { AuthorizationHeaders } from '../types'
 
 export type HttpHeaders = AuthorizationHeaders | { [key: string]: string | number }
+export type RequestParams = { [key: string]: string | number | boolean }
 
 function buildUrl (url: string, params: Object): string {
     const builtUrl = new URL(url)
@@ -115,9 +116,7 @@ export async function get (
         headers,
         params
     }: {
-        params?: {
-            [key: string]: string | number
-        }
+        params?: RequestParams
         headers?: HttpHeaders
     }) {
     return fetchJson(params ? buildUrl(url, params) : url, 'GET', headers)
@@ -129,9 +128,7 @@ export async function gettext (
         headers,
         params
     }: {
-        params?: {
-            [key: string]: string | number
-        }
+        params?: RequestParams
         headers?: HttpHeaders
     }) {
     return fetchText(params ? buildUrl(url, params) : url, 'GET', headers)
@@ -144,9 +141,7 @@ export async function post (
         headers,
         params
     }: {
-        params?: {
-            [key: string]: string | number | boolean
-        }
+        params?: RequestParams
         headers?: HttpHeaders
     }) {
     headers = Object.assign({}, headers, { 'Content-Type': 'application/json' })
@@ -161,9 +156,7 @@ export async function put (
         headers,
         params
     }: {
-        params?: {
-            [key: string]: string | number | boolean
-        }
+        params?: RequestParams
         headers?: HttpHeaders
     }) {
     headers = Object.assign({}, headers, { 'Content-Type': 'application/json' })
@@ -177,9 +170,7 @@ export async function del (
         headers,
         params
     }: {
-        params?: {
-            [key: string]: string | number
-        }
+        params?: RequestParams
         headers?: HttpHeaders
     }, body?: unknown) {
     headers = Object.assign({}, headers, { 'Content-Type': 'application/json' })
