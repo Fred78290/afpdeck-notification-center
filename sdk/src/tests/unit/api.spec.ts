@@ -4,7 +4,7 @@ import AfpDeckNotificationCenter from '../../afpdeck-notification-center'
 import testSubscription from './testSubscription.json'
 import testWebPushKey from './testWebPushKey.json'
 import testUserPreferences from './testUserPreferences.json'
-
+import { ServiceDefinition } from '../../../../lambda'
 const serviceName = 'test-afpdeck-notification-center-sdk'
 const subscriptionName = 'test-afpdeck-notification-center-sdk'
 const browserID = 'B8D59E4D-9C7E-487F-9333-D139739E07F2'
@@ -19,6 +19,17 @@ describe('afpdeck-notification-center sdk', () => {
     expect(process.env.APICORE_USERNAME).toBeDefined()
     expect(process.env.APICORE_PASSWORD).toBeDefined()
     expect(process.env.AFPDECK_NOTIFICATION_URL).toBeDefined()
+
+    const serviceDefinition: ServiceDefinition = {
+        useSharedService: false,
+        definition: {
+            name: serviceName,
+            type: 'mail',
+            datas: {
+                address: process.env.APICORE_EMAIL ?? ''
+            }
+        }
+    }
 
     const apicore = new ApiCore({
         baseUrl: process.env.APICORE_BASE_URL,
@@ -47,21 +58,21 @@ describe('afpdeck-notification-center sdk', () => {
     })
 
     it('verifies successful registerNotification', async () => {
-        const result = await afpdeck.registerNotification(subscriptionName, serviceName, testSubscription)
+        const result = await afpdeck.registerNotification(subscriptionName, serviceName, testSubscription, serviceDefinition)
 
         expect(result).toBeDefined()
         expect(result.status).toBeGreaterThanOrEqual(0)
     })
 
     it('verifies successful listSubscriptions', async () => {
-        const result = await afpdeck.listSubscriptions()
+        const result = await afpdeck.listSubscriptions(serviceDefinition)
 
         expect(result).toBeDefined()
         expect(result?.map(n => n.name)).toContain(subscriptionName)
     })
 
     it('verifies successful deleteNotification', async () => {
-        const result = await afpdeck.deleteNotification(subscriptionName)
+        const result = await afpdeck.deleteNotification(subscriptionName, serviceDefinition)
 
         expect(result).toBeDefined()
         expect(result.status).toBeGreaterThanOrEqual(0)
