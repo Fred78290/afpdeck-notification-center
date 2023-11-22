@@ -287,28 +287,28 @@ async function getUserPreferences(handler: AfpDeckNotificationCenterHandler) {
 describe('Unit test for api with DynamoDB', function () {
 	const handler = new AfpDeckNotificationCenterHandler(false, process.env.MONGODB_URL, true);
 
-	it('verifies successful register with DynamoDB', () => {
-		return register(handler)
+	it('verifies successful register with DynamoDB', async () => {
+		await register(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful list with DynamoDB', () => {
-		list(handler)
+	it('verifies successful list with DynamoDB', async () => {
+		await list(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful push with DynamoDB', () => {
-		return push(handler)
+	it('verifies successful push with DynamoDB', async () => {
+		await push(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful delete with DynamoDB', () => { 
-		return deleteService(handler)
+	it('verifies successful delete with DynamoDB', async () => { 
+		await deleteService(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful store user preferences with DynamoDB', () => {
-		return storeUserPreferences(handler)
+	it('verifies successful store user preferences with DynamoDB', async () => {
+		await storeUserPreferences(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful get user preferences with DynamoDB', () => {
-		return getUserPreferences(handler)
+	it('verifies successful get user preferences with DynamoDB', async () => {
+		await getUserPreferences(handler)
 	}, DEFAULT_TIMEOUT);
 });
 
@@ -317,27 +317,27 @@ describe('Unit test for api with MongoDB', function () {
 
 	const handler = new AfpDeckNotificationCenterHandler(true, process.env.MONGODB_URL, true);
 
-	it('verifies successful register with MongoDB', () => { 
-		return register(handler)
+	it('verifies successful register with MongoDB', async () => { 
+		await register(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful list with MongoDB', () => { 
+	it('verifies successful list with MongoDB', async () => { 
 		return list(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful push with MongoDB', () => { 
-		return push(handler)
+	it('verifies successful push with MongoDB', async () => { 
+		await push(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful delete with MongoDB', () => { 
-		return deleteService(handler)
+	it('verifies successful delete with MongoDB', async () => { 
+		await deleteService(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful store user preferences with MongoDB', () => {
-		return storeUserPreferences(handler)
+	it('verifies successful store user preferences with MongoDB', async () => {
+		await storeUserPreferences(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful get user preferences with MongoDB', () => {
-		return getUserPreferences(handler)
+	it('verifies successful get user preferences with MongoDB', async () => {
+		await getUserPreferences(handler)
 	}, DEFAULT_TIMEOUT);
 });
