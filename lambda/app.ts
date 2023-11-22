@@ -62,12 +62,49 @@ export interface WebPushUser {
     subscription: PushSubscription;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function handleError(err: any) {
+    console.error(err);
+
+    if (err.code && err.message) {
+        return {
+            statusCode: err.code,
+            body: JSON.stringify({
+                error: {
+                    message: err.message,
+                    code: err.code,
+                },
+            }),
+        };
+    } else if (err instanceof HttpError) {
+        return {
+            statusCode: err.statusCode,
+            body: JSON.stringify({
+                error: {
+                    message: err.message,
+                    code: err.statusCode,
+                },
+            }),
+        };
+    } else {
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                error: {
+                    message: err.message ? err.message : err.toString(),
+                    code: 500,
+                },
+            }),
+        };
+    }
+}
+
 export class AfpDeckNotificationCenterHandler {
     private debug: boolean;
     private accessStorage: AccessStorage;
 
-    constructor(useMongoDB: boolean, mongoURL?: string, debug: boolean) {
-        this.accessStorage = database(useMongoDB, mongoURL);
+    constructor(accessStorage: AccessStorage, debug: boolean) {
+        this.accessStorage = accessStorage;
         this.debug = debug;
     }
 
@@ -347,43 +384,6 @@ export class AfpDeckNotificationCenterHandler {
         };
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private handleError(err: any) {
-        console.error(err);
-
-        if (err.code && err.message) {
-            return {
-                statusCode: err.code,
-                body: JSON.stringify({
-                    error: {
-                        message: err.message,
-                        code: err.code,
-                    },
-                }),
-            };
-        } else if (err instanceof HttpError) {
-            return {
-                statusCode: err.statusCode,
-                body: JSON.stringify({
-                    error: {
-                        message: err.message,
-                        code: err.statusCode,
-                    },
-                }),
-            };
-        } else {
-            return {
-                statusCode: 500,
-                body: JSON.stringify({
-                    error: {
-                        message: err.message ? err.message : err.toString(),
-                        code: 500,
-                    },
-                }),
-            };
-        }
-    }
-
     private getServiceDefinition(queryStringParameters: APIGatewayProxyEventQueryStringParameters | null): ServiceDefinition {
         if (queryStringParameters) {
             if (queryStringParameters.serviceName && queryStringParameters.serviceType && queryStringParameters.serviceData) {
@@ -598,7 +598,7 @@ export class AfpDeckNotificationCenterHandler {
 
             return response;
         } catch (err) {
-            return this.handleError(err);
+            return handleError(err);
         }
     }
 }
@@ -613,13 +613,16 @@ export class AfpDeckNotificationCenterHandler {
  *
  */
 export const apiHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    if (!handler) {
-        handler = new AfpDeckNotificationCenterHandler(
-            parseBoolean(process.env.USE_MONGODB),
-            process.env.MONGODB_URL,
-            parseBoolean(event.queryStringParameters?.debug) || parseBoolean(process.env.DEBUG_LAMBDA),
-        );
-    }
+    try {
+        if (!handler) {
+            handler = new AfpDeckNotificationCenterHandler(
+                await database(parseBoolean(process.env.USE_MONGODB), process.env.MONGODB_URL),
+                parseBoolean(event.queryStringParameters?.debug) || parseBoolean(process.env.DEBUG_LAMBDA),
+            );
+        }
 
-    return handler.handleEvent(event);
+        return handler.handleEvent(event);
+    } catch (e) {
+        return handleError(e);
+    }
 };

@@ -33,6 +33,8 @@ export interface WebPushUserDocument {
 }
 
 export interface AccessStorage {
+    connect(): Promise<AccessStorage>;
+
     storeUserPreferences(document: UserPreferencesDocument): Promise<void>;
     getUserPreferences(principalId: string, name: string): Promise<UserPreferencesDocument>;
 
@@ -45,16 +47,20 @@ export interface AccessStorage {
     deleteSubscription(owner: string, name: string, browserID: string): Promise<void>;
 }
 
-export default function database(useMongoDB: boolean, mongoURL?: string): AccessStorage {
+export default async function database(useMongoDB: boolean, mongoURL?: string): Promise<AccessStorage> {
+    let db: AccessStorage;
+
     if (useMongoDB) {
         if (mongoURL) {
-            return new MongoDBAccessStorage(mongoURL, process.env.USERPREFS_TABLENAME, process.env.WEBPUSH_TABLE_NAME, process.env.SUBSCRIPTIONS_TABLE_NAME);
+            db = new MongoDBAccessStorage(mongoURL, process.env.USERPREFS_TABLENAME, process.env.WEBPUSH_TABLE_NAME, process.env.SUBSCRIPTIONS_TABLE_NAME);
         } else {
             throw Error('Mongo URL not defined');
         }
     } else {
-        return new DynamoDBAccessStorage(process.env.USERPREFS_TABLENAME, process.env.WEBPUSH_TABLE_NAME, process.env.SUBSCRIPTIONS_TABLE_NAME);
+        db = new DynamoDBAccessStorage(process.env.USERPREFS_TABLENAME, process.env.WEBPUSH_TABLE_NAME, process.env.SUBSCRIPTIONS_TABLE_NAME);
     }
+
+    return db.connect();
 }
 
 export function parseBoolean(value?: string, defaultValue: boolean = false) {

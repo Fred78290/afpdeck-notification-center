@@ -81,163 +81,206 @@ const WebPushUserSchema = new mongoose.Schema<WebPushUserDocument>({
 
 export class MongoDBAccessStorage implements AccessStorage {
     private mongoURL: string;
-    private connection: mongoose.Connection;
     private userPreferencesCollection: string;
     private webPushUserCollection: string;
     private subscriptionCollection: string;
-    private webPushUserModel: mongoose.Model<WebPushUserDocument>;
-    private subscriptionModel = mongoose.Model<SubscriptionDocument>;
-    private userPreferencesModel = mongoose.Model<UserPreferencesDocument>;
+    private webPushUserModel: mongoose.Model<WebPushUserDocument> | undefined;
+    private subscriptionModel: mongoose.Model<SubscriptionDocument> | undefined;
+    private userPreferencesModel: mongoose.Model<UserPreferencesDocument> | undefined;
 
     constructor(mongoURL: string, userPreferencesCollection?: string, webPushUserCollection?: string, subscriptionCollection?: string) {
         this.mongoURL = mongoURL;
         this.userPreferencesCollection = userPreferencesCollection ?? DEFAULT_SUBSCRIPTIONS_COLLECTION;
         this.webPushUserCollection = webPushUserCollection ?? DEFAULT_WEBPUSH_COLLECTION;
         this.subscriptionCollection = subscriptionCollection ?? DEFAULT_USERPREFS_COLLECTION;
+    }
 
-        this.connection = mongoose.createConnection(this.mongoURL, { autoCreate: true });
-        this.webPushUserModel = mongoose.model<WebPushUserDocument>('WebPushUser', WebPushUserSchema, this.webPushUserCollection);
-        this.userPreferencesModel = mongoose.model<UserPreferencesDocument>('UserPreferences', UserPreferencesSchema, this.userPreferencesCollection);
-        this.subscriptionModel = mongoose.model<SubscriptionDocument>('Subscription', SubscriptionSchema, this.subscriptionCollection);
+    connect(): Promise<AccessStorage> {
+        return new Promise<AccessStorage>((resolve, reject) => {
+            mongoose
+                .createConnection(this.mongoURL, { autoCreate: true })
+                .asPromise()
+                .then((m) => {
+                    this.webPushUserModel = m.model<WebPushUserDocument>('WebPushUser', WebPushUserSchema, this.webPushUserCollection);
+                    this.userPreferencesModel = m.model<UserPreferencesDocument>('UserPreferences', UserPreferencesSchema, this.userPreferencesCollection);
+                    this.subscriptionModel = m.model<SubscriptionDocument>('Subscription', SubscriptionSchema, this.subscriptionCollection);
+                    resolve(this);
+                })
+                .catch((e) => {
+                    reject(e);
+                });
+        });
     }
 
     public storeUserPreferences(document: UserPreferencesDocument): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            const doc = new this.userPreferencesModel(document);
+            if (this.userPreferencesModel) {
+                const doc = new this.userPreferencesModel(document);
 
-            doc.save()
-                .then(() => {
-                    resolve();
-                })
-                .catch((e: any) => {
-                    reject(e);
-                });
+                doc.save()
+                    .then(() => {
+                        resolve();
+                    })
+                    .catch((e: any) => {
+                        reject(e);
+                    });
+            } else {
+                reject(new Error('Not connected'));
+            }
         });
     }
 
     public getUserPreferences(principalId: string, name: string): Promise<UserPreferencesDocument> {
         return new Promise<UserPreferencesDocument>((resolve, reject) => {
-            this.userPreferencesModel
-                .findOne({
-                    owner: principalId,
-                    name: name,
-                })
-                .exec()
-                .then((result) => {
-                    resolve(result);
-                })
-                .catch((e: any) => {
-                    reject(e);
-                });
+            if (this.userPreferencesModel) {
+                this.userPreferencesModel
+                    .findOne({
+                        owner: principalId,
+                        name: name,
+                    })
+                    .exec()
+                    .then((result) => {
+                        resolve(result);
+                    })
+                    .catch((e: any) => {
+                        reject(e);
+                    });
+            } else {
+                reject(new Error('Not connected'));
+            }
         });
     }
 
     public findPushKeyForIdentity(principalId: string, browserID: string): Promise<WebPushUserDocument[]> {
         return new Promise<WebPushUserDocument[]>((resolve, reject) => {
-            const filter =
-                browserID === ALL_BROWSERS
-                    ? {
-                          owner: principalId,
-                      }
-                    : {
-                          owner: principalId,
-                          browserID: browserID,
-                      };
+            if (this.webPushUserModel) {
+                const filter =
+                    browserID === ALL_BROWSERS
+                        ? {
+                              owner: principalId,
+                          }
+                        : {
+                              owner: principalId,
+                              browserID: browserID,
+                          };
 
-            this.webPushUserModel
-                .find(filter)
-                .exec()
-                .then((results) => {
-                    resolve(results);
-                })
-                .catch((e) => {
-                    reject(e);
-                });
+                this.webPushUserModel
+                    .find(filter)
+                    .exec()
+                    .then((results) => {
+                        resolve(results);
+                    })
+                    .catch((e) => {
+                        reject(e);
+                    });
+            } else {
+                reject(new Error('Not connected'));
+            }
         });
     }
 
     public storeWebPushUserDocument(document: WebPushUserDocument): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            const doc = new this.webPushUserModel(document);
+            if (this.webPushUserModel) {
+                const doc = new this.webPushUserModel(document);
 
-            doc.save()
-                .then(() => {
-                    resolve();
-                })
-                .catch((e) => {
-                    reject(e);
-                });
+                doc.save()
+                    .then(() => {
+                        resolve();
+                    })
+                    .catch((e) => {
+                        reject(e);
+                    });
+            } else {
+                reject(new Error('Not connected'));
+            }
         });
     }
 
     public updateWebPushUserDocument(document: WebPushUserDocument): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            const doc = new this.webPushUserModel(document);
+            if (this.webPushUserModel) {
+                const doc = new this.webPushUserModel(document);
 
-            this.webPushUserModel
-                .findOneAndUpdate(
-                    {
-                        owner: document.owner,
-                        browserID: document.browserID,
-                    },
-                    doc,
-                )
-                .exec()
-                .then(() => {
-                    resolve();
-                })
-                .catch((e) => {
-                    reject(e);
-                });
+                this.webPushUserModel
+                    .findOneAndUpdate(
+                        {
+                            owner: document.owner,
+                            browserID: document.browserID,
+                        },
+                        doc,
+                    )
+                    .exec()
+                    .then(() => {
+                        resolve();
+                    })
+                    .catch((e) => {
+                        reject(e);
+                    });
+            } else {
+                reject(new Error('Not connected'));
+            }
         });
     }
 
     public getSubscriptions(owner: string, name: string): Promise<SubscriptionDocument[]> {
         return new Promise<SubscriptionDocument[]>((resolve, reject) => {
-            this.subscriptionModel
-                .find({
-                    owner: owner,
-                    name: name,
-                })
-                .exec()
-                .then((results) => {
-                    resolve(results);
-                })
-                .catch((e) => {
-                    reject(e);
-                });
+            if (this.subscriptionModel) {
+                this.subscriptionModel
+                    .find({
+                        owner: owner,
+                        name: name,
+                    })
+                    .exec()
+                    .then((results) => {
+                        resolve(results);
+                    })
+                    .catch((e) => {
+                        reject(e);
+                    });
+            } else {
+                reject(new Error('Not connected'));
+            }
         });
     }
 
     public storeSubscription(subscription: SubscriptionDocument): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            const doc = new this.subscriptionModel(subscription);
+            if (this.subscriptionModel) {
+                const doc = new this.subscriptionModel(subscription);
 
-            doc.save()
-                .then(() => {
-                    resolve();
-                })
-                .catch((e: any) => {
-                    reject(e);
-                });
+                doc.save()
+                    .then(() => {
+                        resolve();
+                    })
+                    .catch((e: any) => {
+                        reject(e);
+                    });
+            } else {
+                reject(new Error('Not connected'));
+            }
         });
     }
 
     public deleteSubscription(owner: string, name: string, browserID: string): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            this.subscriptionModel
-                .findOneAndDelete({
-                    owner: owner,
-                    name: String,
-                    browserID: browserID,
-                })
-                .exec()
-                .then(() => {
-                    resolve();
-                })
-                .catch((e: any) => {
-                    reject(e);
-                });
+            if (this.subscriptionModel) {
+                this.subscriptionModel
+                    .findOneAndDelete({
+                        owner: owner,
+                        name: String,
+                        browserID: browserID,
+                    })
+                    .exec()
+                    .then(() => {
+                        resolve();
+                    })
+                    .catch((e: any) => {
+                        reject(e);
+                    });
+            } else {
+                reject(new Error('Not connected'));
+            }
         });
     }
 }

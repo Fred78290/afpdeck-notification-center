@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { DynamoDB } from '@aws-sdk/client-dynamodb';
+import { $Command, DynamoDB } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb';
 import { defineTable, TableClient } from '@hexlabs/dynamo-ts';
 import { ALL_BROWSERS, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument } from '../index';
@@ -89,6 +89,10 @@ export class DynamoDBAccessStorage implements AccessStorage {
             logStatements: true,
             tableName: subscriptionTableName ?? DEFAULT_SUBSCRIPTIONS_TABLENAME,
         });
+    }
+
+    connect(): Promise<AccessStorage> {
+        return Promise.resolve(this);
     }
 
     public storeUserPreferences(document: UserPreferencesDocument): Promise<void> {
