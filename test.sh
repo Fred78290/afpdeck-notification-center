@@ -4,7 +4,7 @@ set -x
 source .env
 
 SERVICE=$(cat <<EOF
-serviceName=test-notification-center&serviceType=mail&serviceData=\{"address":"$APICORE_EMAIL"\}
+serviceName=test-notification-center&serviceType=mail&serviceData=\{\"address\":\"$APICORE_EMAIL\"\}
 EOF
 )
 

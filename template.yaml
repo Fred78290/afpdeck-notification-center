@@ -66,6 +66,11 @@ Parameters:
   UserPreferencesTableName:
     Type: String
     Default: 'afpdeck-preferences'
+  MongoURL:
+    Type: String
+  UseMongoDB:
+    Type: String
+    Default: 'false'
 Resources:
   AfpDeckNotificationCenterFunctionRole:
     Type: AWS::IAM::Role
@@ -198,18 +203,31 @@ Resources:
       TableName: !Ref UserPreferencesTableName
       BillingMode: PAY_PER_REQUEST
       TimeToLiveSpecification: # deletes cache keys automatically based on a ttl field which contains a timestamp
-          AttributeName: ttl
-          Enabled: true
+          AttributeName: updated
+          Enabled: false
       AttributeDefinitions:
         - AttributeName: owner
           AttributeType: S
         - AttributeName: name
           AttributeType: S
+        - AttributeName: updated
+          AttributeType: N
       KeySchema:
         - AttributeName: owner
           KeyType: HASH
         - AttributeName: name
           KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: name-index
+          KeySchema:
+            - AttributeName: name
+              KeyType: HASH
+            - AttributeName: updated
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - owner
           
   AfpDeckNotificationCenterTable:
     Type: AWS::DynamoDB::Table
@@ -217,8 +235,8 @@ Resources:
       TableName: !Ref SubscriptionsTableName
       BillingMode: PAY_PER_REQUEST
       TimeToLiveSpecification: # deletes cache keys automatically based on a ttl field which contains a timestamp
-          AttributeName: ttl
-          Enabled: true
+          AttributeName: created
+          Enabled: false
       AttributeDefinitions:
         - AttributeName: owner
           AttributeType: S
@@ -265,18 +283,31 @@ Resources:
       TableName: !Ref WebPushTableName
       BillingMode: PAY_PER_REQUEST
       TimeToLiveSpecification: # deletes cache keys automatically based on a ttl field which contains a timestamp
-          AttributeName: ttl
-          Enabled: true
+          AttributeName: created
+          Enabled: false
       AttributeDefinitions:
         - AttributeName: owner
           AttributeType: S
         - AttributeName: browserID
           AttributeType: S
+        - AttributeName: created
+          AttributeType: N
       KeySchema:
         - AttributeName: owner
           KeyType: HASH
         - AttributeName: browserID
           KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: browserID-index
+          KeySchema:
+            - AttributeName: browserID
+              KeyType: HASH
+            - AttributeName: created
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - owner
 
   AfpDeckNotificationCenterApi:
     Type: AWS::Serverless::Api
@@ -350,6 +381,8 @@ Resources:
           SUBSCRIPTIONS_TABLE_NAME: !Ref PublicApiGatewayName
           WEBPUSH_TABLE_NAME: !Ref SubscriptionsTableName
           USERPREFS_TABLENAME: !Ref UserPreferencesTableName
+          USE_MONGODB: !Ref UseMongoDB
+          MONGODB_URL: !Ref MongoURL
           DEBUG_LAMBDA: !Ref DebugLambda
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
@@ -442,6 +475,8 @@ Resources:
           SUBSCRIPTIONS_TABLE_NAME: !Ref PublicApiGatewayName
           WEBPUSH_TABLE_NAME: !Ref SubscriptionsTableName
           USERPREFS_TABLENAME: !Ref UserPreferencesTableName
+          USE_MONGODB: !Ref UseMongoDB
+          MONGODB_URL: !Ref MongoURL
           DEBUG_LAMBDA: !Ref DebugLambda
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild

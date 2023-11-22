@@ -44,6 +44,8 @@ ParameterKey=ApiCoreServiceUserName,ParameterValue=${APICORE_SERVICE_USERNAME}
 ParameterKey=ApiCoreServicePassword,ParameterValue=${APICORE_SERVICE_PASSWORD}
 ParameterKey=ApiCoreUseSharedService,ParameterValue=${APICORE_USE_SHAREDSERVICE}
 ParameterKey=AfpDeckPushUrl,ParameterValue=https://afpdeck-notification-center.${DOMAIN_NAME}/api/push/
+ParameterKey=MongoURL,ParameterValue=${MONGODB_URL}
+ParameterKey=UseMongoDB,ParameterValue=${USE_MONGODB}
 ParameterKey=DebugLambda,ParameterValue=${DEBUG_LAMBDA}
 EOF
 )

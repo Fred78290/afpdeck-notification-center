@@ -1,5 +1,5 @@
 
-import lambda from './lambda/index';
+import lambda from '../lambda/index';
 import express, { Request, Response, NextFunction } from "express";
 import { APIGatewayProxyEvent, APIGatewayRequestAuthorizerEvent, APIGatewayAuthorizerResult, APIGatewayProxyEventQueryStringParameters, APIGatewayProxyEventMultiValueQueryStringParameters } from 'aws-lambda';
 import useragent from 'express-useragent';

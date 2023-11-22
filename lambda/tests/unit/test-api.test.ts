@@ -1,6 +1,6 @@
 /* eslint-disable prettier/prettier */
 import { APIGatewayProxyEvent, APIGatewayProxyEventQueryStringParameters, APIGatewayProxyEventPathParameters } from 'aws-lambda';
-import { apiHandler } from '../../app';
+import { AfpDeckNotificationCenterHandler } from '../../app';
 import { DynamoDB, DeleteTableCommandOutput, CreateTableCommandInput } from '@aws-sdk/client-dynamodb';
 import testSubscription from './testSubscription.json';
 import testPush from './testPush.json';
@@ -198,13 +198,14 @@ beforeAll((done) => {
 
 		createDynamoDBTables().then((values) => {
 			values.forEach(v => {
+				let reason;
+
 				if (v.status === 'rejected') {
 					console.error(v.reason)
-					done(v.reason)
 				}
 			})
 
-			console.log("Did create dynamodb tables")
+			console.log("Did create dynamodb tables");
 			done();
 		}).catch((e) => {
 			console.error(e)
@@ -217,7 +218,6 @@ beforeAll((done) => {
 
 }, 60000);
 
-
 afterAll((done) => {
 	deleteDynamoDBTables().then(() => {
 		console.log("Delete dynamodb tables")
@@ -228,60 +228,116 @@ afterAll((done) => {
 	});
 });
 
-describe('Unit test for api', function () {
-	it('verifies successful register', async () => {
-		const event = buildEvent('POST', `/register/${serviceName}`, servicePathParameters, serviceDefinition, testSubscription);
-		const result = await apiHandler(event);
+async function register(handler: AfpDeckNotificationCenterHandler) {
+	const event = buildEvent('POST', `/register/${serviceName}`, servicePathParameters, serviceDefinition, testSubscription);
+	const result = await handler.handleEvent(event);
 
-		console.log(result);
+	console.log(result);
 
-		expect(result.statusCode).toEqual(200);
+	expect(result.statusCode).toEqual(200);
+}
+
+async function list(handler: AfpDeckNotificationCenterHandler) {
+	const event = buildEvent('GET', '/list', null, serviceDefinition, null);
+	const result = await handler.handleEvent(event);
+
+	console.log(result);
+
+	expect(result.statusCode).toEqual(200);
+}
+
+async function push(handler: AfpDeckNotificationCenterHandler) {
+	const event = buildEvent('POST', `/push/${serviceName}`, servicePathParameters, serviceDefinition, testPush);
+	const result = await handler.handleEvent(event);
+
+	console.log(result);
+
+	expect(result.statusCode).toEqual(200);
+}
+
+async function deleteService(handler: AfpDeckNotificationCenterHandler) {
+	const event = buildEvent('DELETE', `/delete/${serviceName}`, servicePathParameters, serviceDefinition, null);
+	const result = await handler.handleEvent(event);
+
+	await deleteDynamoDBTables();
+
+	console.log(result);
+
+	expect(result.statusCode).toEqual(200);
+}
+
+async function storeUserPreferences(handler: AfpDeckNotificationCenterHandler) {
+	const event = buildEvent('POST', `/preferences/${serviceName}`, servicePathParameters, null, testPrefs);
+	const result = await handler.handleEvent(event);
+
+	console.log(result);
+
+	expect(result.statusCode).toEqual(200);
+}
+
+async function getUserPreferences(handler: AfpDeckNotificationCenterHandler) {
+	const event = buildEvent('GET', `/preferences/${serviceName}`, servicePathParameters, null, null);
+	const result = await handler.handleEvent(event);
+
+	console.log(result);
+
+	expect(result.statusCode).toEqual(200);
+}
+
+describe('Unit test for api with DynamoDB', function () {
+	const handler = new AfpDeckNotificationCenterHandler(false, process.env.MONGODB_URL, true);
+
+	it('verifies successful register with DynamoDB', () => {
+		return register(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful list', async () => {
-		const event = buildEvent('GET', '/list', null, serviceDefinition, null);
-		const result = await apiHandler(event);
-
-		console.log(result);
-
-		expect(result.statusCode).toEqual(200);
+	it('verifies successful list with DynamoDB', () => {
+		list(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful push', async () => {
-		const event = buildEvent('POST', `/push/${serviceName}`, servicePathParameters, serviceDefinition, testPush);
-		const result = await apiHandler(event);
-
-		console.log(result);
-
-		expect(result.statusCode).toEqual(200);
+	it('verifies successful push with DynamoDB', () => {
+		return push(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful delete', async () => {
-		const event = buildEvent('DELETE', `/delete/${serviceName}`, servicePathParameters, serviceDefinition, null);
-		const result = await apiHandler(event);
-
-		await deleteDynamoDBTables();
-
-		console.log(result);
-
-		expect(result.statusCode).toEqual(200);
+	it('verifies successful delete with DynamoDB', () => { 
+		return deleteService(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful store user preferences', async () => {
-		const event = buildEvent('POST', `/preferences/${serviceName}`, servicePathParameters, null, testPrefs);
-		const result = await apiHandler(event);
-
-		console.log(result);
-
-		expect(result.statusCode).toEqual(200);
+	it('verifies successful store user preferences with DynamoDB', () => {
+		return storeUserPreferences(handler)
 	}, DEFAULT_TIMEOUT);
 
-	it('verifies successful get user preferences', async () => {
-		const event = buildEvent('GET', `/preferences/${serviceName}`, servicePathParameters, null, null);
-		const result = await apiHandler(event);
+	it('verifies successful get user preferences with DynamoDB', () => {
+		return getUserPreferences(handler)
+	}, DEFAULT_TIMEOUT);
+});
 
-		console.log(result);
+describe('Unit test for api with MongoDB', function () {
+	expect(process.env.MONGODB_URL).toBeDefined();
 
-		expect(result.statusCode).toEqual(200);
+	const handler = new AfpDeckNotificationCenterHandler(true, process.env.MONGODB_URL, true);
+
+	it('verifies successful register with MongoDB', () => { 
+		return register(handler)
+	}, DEFAULT_TIMEOUT);
+
+	it('verifies successful list with MongoDB', () => { 
+		return list(handler)
+	}, DEFAULT_TIMEOUT);
+
+	it('verifies successful push with MongoDB', () => { 
+		return push(handler)
+	}, DEFAULT_TIMEOUT);
+
+	it('verifies successful delete with MongoDB', () => { 
+		return deleteService(handler)
+	}, DEFAULT_TIMEOUT);
+
+	it('verifies successful store user preferences with MongoDB', () => {
+		return storeUserPreferences(handler)
+	}, DEFAULT_TIMEOUT);
+
+	it('verifies successful get user preferences with MongoDB', () => {
+		return getUserPreferences(handler)
 	}, DEFAULT_TIMEOUT);
 });

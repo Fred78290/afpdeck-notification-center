@@ -1,0 +1,1 @@
+./node_modules/.bin/jest --runInBand --testPathPattern '/Users/fboltz/Projects/GitHub/afpdeck-notification-center/lambda/tests/unit/test-api.test.ts' --testNamePattern '^Unit test for api verifies successful register with DynamoDB$'

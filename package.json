@@ -8,8 +8,8 @@
   "license": "MIT",
   "type": "commonjs",
   "scripts": {
-    "dev": "nodemon --watch lambda -r dotenv/config -e js,ts,json --exec \"ts-node server.ts\"",
-    "build": "tsup server.ts --format cjs --clean",
+    "dev": "nodemon --watch lambda -r dotenv/config -e js,ts,json --exec \"ts-node src/server.ts\"",
+    "build": "tsup src/server.ts --format cjs --clean",
     "docker": "./docker.sh",
     "local": "node dist/server.js -r dotenv/config",
     "start": "node server.js",
@@ -28,6 +28,7 @@
     "express": "^4.18.2",
     "express-useragent": "^1.0.15",
     "install": "^0.13.0",
+    "mongoose": "^8.0.1",
     "nodejs-base64": "^2.0.0",
     "npm": "^10.2.2",
     "web-push": "^3.6.6"
@@ -45,6 +46,7 @@
     "@types/express": "^4.17.20",
     "@types/express-useragent": "^1.0.5",
     "@types/jest": "^29.5.7",
+    "@types/mongoose": "^5.11.97",
     "@types/node": "^20.8.10",
     "@types/web-push": "^3.6.3",
     "@typescript-eslint/eslint-plugin": "^6.9.1",
