@@ -213,4 +213,4 @@ template.yaml.out
 package-lock.json
 nodemon.json
 
-.vscode/settings.json
+.vscode
