@@ -34,7 +34,6 @@ jobs:
         run: |
           [ -z "${AWS_ROLE_TO_ASSUME}" ] && (echo "AWS_ROLE_TO_ASSUME is missing" ; exit 1)
           [ -z "${AWS_REGION}" ] && (echo "AWS_REGION is missing" ; exit 1)
-          [ -z "${AWS_BUCKETNAME}" ] && (echo "AWS_BUCKETNAME is missing" ; exit 1)
           [ -z "${DOMAIN_NAME}" ] && (echo "DOMAIN_NAME is missing" ; exit 1)
           echo "Every thing OK"
           exit
