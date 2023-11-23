@@ -7,7 +7,7 @@
 	"author": "SAM CLI",
 	"license": "MIT",
 	"scripts": {
-		"unit": "jest --runInBand",
+		"unit": "jest --runInBand --detectOpenHandles",
 		"lint": "eslint '*.ts' --quiet --fix",
 		"compile": "tsc",
 		"test": "npm run compile && npm run unit"

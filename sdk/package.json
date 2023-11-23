@@ -32,6 +32,7 @@
 	"devDependencies": {
 		"@types/jest": "^29.5.8",
 		"@types/node": "^20.9.1",
+		"@types/statuses": "^2.0.4",
 		"@typescript-eslint/eslint-plugin": "^6.11.0",
 		"@typescript-eslint/eslint-plugin-tslint": "^6.11.0",
 		"@typescript-eslint/parser": "^6.11.0",
@@ -49,7 +50,6 @@
 	},
 	"dependencies": {
 		"@fingerprintjs/fingerprintjs": "^4.2.1",
-		"afp-afpdeck-notification-center-sdk": "^1.1.7",
 		"cross-fetch": "^4.0.0",
 		"statuses": "^2.0.1"
 	},

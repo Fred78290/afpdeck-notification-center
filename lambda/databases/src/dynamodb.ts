@@ -91,7 +91,11 @@ export class DynamoDBAccessStorage implements AccessStorage {
         });
     }
 
-    connect(): Promise<AccessStorage> {
+    public disconnect(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    public connect(): Promise<AccessStorage> {
         return Promise.resolve(this);
     }
 

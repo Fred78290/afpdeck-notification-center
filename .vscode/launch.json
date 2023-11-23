@@ -10,9 +10,9 @@
       "name": "Server",
       "skipFiles": ["<node_internals>/**"],
       "envFile": "${workspaceFolder}/lambda/configs/.env",
-      "program": "${workspaceFolder}/server.ts",
+      "program": "${workspaceFolder}/build/src/server.js",
       "preLaunchTask": "tsc: build - tsconfig.json",
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"]
+      "outFiles": ["${workspaceFolder}/build/**/*.js"]
     },
     {
       "name": "Debug Jest Tests",

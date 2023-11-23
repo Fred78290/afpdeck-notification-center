@@ -101,11 +101,13 @@ function handleError(err: any) {
 
 export class AfpDeckNotificationCenterHandler {
     private debug: boolean;
+    private closed: boolean;
     private accessStorage: AccessStorage;
 
     constructor(accessStorage: AccessStorage, debug: boolean) {
         this.accessStorage = accessStorage;
         this.debug = debug;
+        this.closed = false;
     }
 
     private getNotificationCenter(identity: Identify) {
@@ -506,6 +508,15 @@ export class AfpDeckNotificationCenterHandler {
         }
     }
 
+    public close(): Promise<void> {
+        if (this.closed) {
+            return Promise.resolve();
+        }
+
+        this.closed = true;
+        return this.accessStorage.disconnect();
+    }
+
     public async handleEvent(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
         let response: Promise<APIGatewayProxyResult>;
 
@@ -602,6 +613,14 @@ export class AfpDeckNotificationCenterHandler {
         }
     }
 }
+
+process.on('SIGTERM', async () => {
+    if (handler) {
+        handler.close().finally(() => {
+            process.exit(0);
+        });
+    }
+});
 
 /**
  *

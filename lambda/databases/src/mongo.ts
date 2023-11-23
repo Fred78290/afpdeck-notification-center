@@ -15,21 +15,6 @@ const UserPreferencesSchema = new mongoose.Schema<UserPreferencesDocument>({
     preferences: { type: mongoose.Schema.Types.Mixed, required: true },
 });
 
-const RequestSchema = new mongoose.Schema<Request>({
-    name: { type: String },
-    value: { type: mongoose.Schema.Types.Mixed },
-    in: { type: Array<string | number> },
-    exclude: { type: Array<string | number> },
-    and: { type: mongoose.Schema.Types.Mixed },
-    or: { type: mongoose.Schema.Types.Mixed },
-});
-
-const QuietTimeSchema = new mongoose.Schema<QuietTime>({
-    endTime: { type: String },
-    startTime: { type: String },
-    tz: { type: String },
-});
-
 const SubscriptionSchema = new mongoose.Schema<SubscriptionDocument>({
     name: { type: String, required: true, index: true },
     owner: { type: String, required: true, index: true },
@@ -38,7 +23,7 @@ const SubscriptionSchema = new mongoose.Schema<SubscriptionDocument>({
     updated: { type: Date, required: true },
     created: { type: Date, required: true },
     subscription: {
-        query: RequestSchema,
+        query: { type: mongoose.Schema.Types.Mixed },
         dontDisturb: {
             type: Boolean,
             required: true,
@@ -47,25 +32,10 @@ const SubscriptionSchema = new mongoose.Schema<SubscriptionDocument>({
             type: Array<string>,
             required: true,
         },
-        quietTime: QuietTimeSchema,
-    },
-});
-
-const VapidKeysSchema = new mongoose.Schema<VapidKeys>({
-    publicKey: { type: String, required: true },
-    privateKey: { type: String, required: true },
-});
-
-const PushSubscriptionSchema = new mongoose.Schema<PushSubscription>({
-    endpoint: { type: String, required: true },
-    keys: {
-        p256dh: {
-            type: String,
-            required: true,
-        },
-        auth: {
-            type: String,
-            required: true,
+        quietTime: {
+            endTime: { type: String },
+            startTime: { type: String },
+            tz: { type: String },
         },
     },
 });
@@ -75,12 +45,28 @@ const WebPushUserSchema = new mongoose.Schema<WebPushUserDocument>({
     browserID: { type: String, required: true, index: true },
     updated: { type: Date, required: true },
     created: { type: Date, required: true },
-    apiKeys: VapidKeysSchema,
-    subscription: PushSubscriptionSchema,
+    apiKeys: {
+        publicKey: { type: String, required: true },
+        privateKey: { type: String, required: true },
+    },
+    subscription: {
+        endpoint: { type: String, required: true },
+        keys: {
+            p256dh: {
+                type: String,
+                required: true,
+            },
+            auth: {
+                type: String,
+                required: true,
+            },
+        },
+    },
 });
 
 export class MongoDBAccessStorage implements AccessStorage {
     private mongoURL: string;
+    private connection: mongoose.Connection | undefined;
     private userPreferencesCollection: string;
     private webPushUserCollection: string;
     private subscriptionCollection: string;
@@ -95,12 +81,21 @@ export class MongoDBAccessStorage implements AccessStorage {
         this.subscriptionCollection = subscriptionCollection ?? DEFAULT_USERPREFS_COLLECTION;
     }
 
+    disconnect(): Promise<void> {
+        if (this.connection) {
+            return this.connection?.close(true);
+        }
+
+        return Promise.resolve();
+    }
+
     connect(): Promise<AccessStorage> {
         return new Promise<AccessStorage>((resolve, reject) => {
             mongoose
                 .createConnection(this.mongoURL, { autoCreate: true })
                 .asPromise()
                 .then((m) => {
+                    this.connection = m;
                     this.webPushUserModel = m.model<WebPushUserDocument>('WebPushUser', WebPushUserSchema, this.webPushUserCollection);
                     this.userPreferencesModel = m.model<UserPreferencesDocument>('UserPreferences', UserPreferencesSchema, this.userPreferencesCollection);
                     this.subscriptionModel = m.model<SubscriptionDocument>('Subscription', SubscriptionSchema, this.subscriptionCollection);
@@ -140,7 +135,11 @@ export class MongoDBAccessStorage implements AccessStorage {
                     })
                     .exec()
                     .then((result) => {
-                        resolve(result);
+                        if (result != null) {
+                            resolve(result);
+                        } else {
+                            reject(new Error('Not found'));
+                        }
                     })
                     .catch((e: any) => {
                         reject(e);

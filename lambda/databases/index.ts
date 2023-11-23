@@ -34,6 +34,7 @@ export interface WebPushUserDocument {
 
 export interface AccessStorage {
     connect(): Promise<AccessStorage>;
+    disconnect(): Promise<void>;
 
     storeUserPreferences(document: UserPreferencesDocument): Promise<void>;
     getUserPreferences(principalId: string, name: string): Promise<UserPreferencesDocument>;
