@@ -4,10 +4,6 @@ import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb';
 import { defineTable, TableClient } from '@hexlabs/dynamo-ts';
 import { ALL_BROWSERS, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument } from '../index';
 
-const DEFAULT_WEBPUSH_TABLENAME = 'afpdeck-webpush';
-const DEFAULT_SUBSCRIPTIONS_TABLENAME = 'afpdeck-subscriptions';
-const DEFAULT_USERPREFS_TABLENAME = 'afpdeck-preferences';
-
 const userPreferencesTable = defineTable(
     {
         owner: 'string',
@@ -68,26 +64,26 @@ export class DynamoDBAccessStorage implements AccessStorage {
     private subscriptionTableClient: TableClient<SubscriptionsTable>;
     private webPushUserTableClient: TableClient<WebPushUserTable>;
 
-    constructor(userPreferencesTableName?: string, webPushUserTableName?: string, subscriptionTableName?: string) {
+    constructor(userPreferencesTableName: string, webPushUserTableName: string, subscriptionTableName: string) {
         const dynamo = new DynamoDB();
         const client = DynamoDBDocument.from(dynamo);
 
         this.userPreferencesTableClient = TableClient.build(userPreferencesTable, {
             client: client,
             logStatements: true,
-            tableName: userPreferencesTableName ?? DEFAULT_USERPREFS_TABLENAME,
+            tableName: userPreferencesTableName,
         });
 
         this.webPushUserTableClient = TableClient.build(webPushUserTable, {
             client: client,
             logStatements: true,
-            tableName: webPushUserTableName ?? DEFAULT_WEBPUSH_TABLENAME,
+            tableName: webPushUserTableName,
         });
 
         this.subscriptionTableClient = TableClient.build(subscriptionsTable, {
             client: client,
             logStatements: true,
-            tableName: subscriptionTableName ?? DEFAULT_SUBSCRIPTIONS_TABLENAME,
+            tableName: subscriptionTableName,
         });
     }
 

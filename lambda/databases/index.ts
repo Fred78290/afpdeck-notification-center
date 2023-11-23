@@ -6,6 +6,10 @@ import { MongoDBAccessStorage } from './src/mongo';
 
 export const ALL_BROWSERS = 'all';
 
+const DEFAULT_WEBPUSH_TABLENAME = 'afpdeck-webpush';
+const DEFAULT_SUBSCRIPTIONS_TABLENAME = 'afpdeck-subscriptions';
+const DEFAULT_USERPREFS_TABLENAME = 'afpdeck-preferences';
+
 export interface UserPreferencesDocument {
     owner: string;
     name: string;
@@ -48,17 +52,32 @@ export interface AccessStorage {
     deleteSubscription(owner: string, name: string, browserID: string): Promise<void>;
 }
 
-export default async function database(useMongoDB: boolean, mongoURL?: string): Promise<AccessStorage> {
+export default async function database(
+    useMongoDB: boolean,
+    mongoURL?: string,
+    userPreferencesTableName?: string,
+    webPushUserTableName?: string,
+    subscriptionTableName?: string,
+): Promise<AccessStorage> {
     let db: AccessStorage;
 
     if (useMongoDB) {
         if (mongoURL) {
-            db = new MongoDBAccessStorage(mongoURL, process.env.USERPREFS_TABLENAME, process.env.WEBPUSH_TABLE_NAME, process.env.SUBSCRIPTIONS_TABLE_NAME);
+            db = new MongoDBAccessStorage(
+                mongoURL,
+                userPreferencesTableName ?? DEFAULT_USERPREFS_TABLENAME,
+                webPushUserTableName ?? DEFAULT_WEBPUSH_TABLENAME,
+                subscriptionTableName ?? DEFAULT_SUBSCRIPTIONS_TABLENAME,
+            );
         } else {
             throw Error('Mongo URL not defined');
         }
     } else {
-        db = new DynamoDBAccessStorage(process.env.USERPREFS_TABLENAME, process.env.WEBPUSH_TABLE_NAME, process.env.SUBSCRIPTIONS_TABLE_NAME);
+        db = new DynamoDBAccessStorage(
+            userPreferencesTableName ?? DEFAULT_USERPREFS_TABLENAME,
+            webPushUserTableName ?? DEFAULT_WEBPUSH_TABLENAME,
+            subscriptionTableName ?? DEFAULT_SUBSCRIPTIONS_TABLENAME,
+        );
     }
 
     return db.connect();

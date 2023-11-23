@@ -635,7 +635,7 @@ export const apiHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewa
     try {
         if (!handler) {
             handler = new AfpDeckNotificationCenterHandler(
-                await database(parseBoolean(process.env.USE_MONGODB), process.env.MONGODB_URL),
+                await database(parseBoolean(process.env.USE_MONGODB), process.env.MONGODB_URL, process.env.USERPREFS_TABLENAME, process.env.WEBPUSH_TABLE_NAME, process.env.SUBSCRIPTIONS_TABLE_NAME),
                 parseBoolean(event.queryStringParameters?.debug) || parseBoolean(process.env.DEBUG_LAMBDA),
             );
         }

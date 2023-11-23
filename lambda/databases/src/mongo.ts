@@ -4,10 +4,6 @@ import { ALL_BROWSERS, AccessStorage, UserPreferencesDocument, WebPushUserDocume
 import { Request, QuietTime } from 'afp-apicore-sdk/dist/types';
 import { VapidKeys, PushSubscription } from 'web-push';
 
-const DEFAULT_WEBPUSH_COLLECTION = 'afpdeck-webpush';
-const DEFAULT_SUBSCRIPTIONS_COLLECTION = 'afpdeck-subscriptions';
-const DEFAULT_USERPREFS_COLLECTION = 'afpdeck-preferences';
-
 const UserPreferencesSchema = new mongoose.Schema<UserPreferencesDocument>({
     name: { type: String, required: true, index: true },
     owner: { type: String, required: true, index: true },
@@ -74,11 +70,11 @@ export class MongoDBAccessStorage implements AccessStorage {
     private subscriptionModel: mongoose.Model<SubscriptionDocument> | undefined;
     private userPreferencesModel: mongoose.Model<UserPreferencesDocument> | undefined;
 
-    constructor(mongoURL: string, userPreferencesCollection?: string, webPushUserCollection?: string, subscriptionCollection?: string) {
+    constructor(mongoURL: string, userPreferencesCollection: string, webPushUserCollection: string, subscriptionCollection: string) {
         this.mongoURL = mongoURL;
-        this.userPreferencesCollection = userPreferencesCollection ?? DEFAULT_SUBSCRIPTIONS_COLLECTION;
-        this.webPushUserCollection = webPushUserCollection ?? DEFAULT_WEBPUSH_COLLECTION;
-        this.subscriptionCollection = subscriptionCollection ?? DEFAULT_USERPREFS_COLLECTION;
+        this.userPreferencesCollection = userPreferencesCollection;
+        this.webPushUserCollection = webPushUserCollection;
+        this.subscriptionCollection = subscriptionCollection;
     }
 
     disconnect(): Promise<void> {

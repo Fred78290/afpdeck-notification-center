@@ -14,9 +14,9 @@ const DEFAULT_TIMEOUT = 30000;
 
 dotenv.config({ path: __dirname + '/../../configs/.env' });
 
-const webPushTableName = process.env.WEBPUSH_TABLE_NAME ?? 'test-afpdeck-webpush';
-const subscriptionsTableName = process.env.SUBSCRIPTIONS_TABLE_NAME ?? 'test-afpdeck-subscriptions';
-const userPrefrencesTableName = process.env.USERPREFS_TABLENAME ?? 'test-afpdeck-preferences';
+const webPushTableName = 'test-afpdeck-webpush';
+const subscriptionsTableName = 'test-afpdeck-subscriptions';
+const userPrefrencesTableName = 'test-afpdeck-preferences';
 const sleep = (waitTimeInMs) => new Promise((resolve) => setTimeout(resolve, waitTimeInMs));
 
 const testPrefs = {
@@ -251,7 +251,7 @@ describe('Unit test for api with DynamoDB', function () {
     beforeAll((done) => {
         console.log('Will authenticate');
 
-        database(false, process.env.MONGODB_URL)
+        database(false, process.env.MONGODB_URL, userPrefrencesTableName, webPushTableName, subscriptionsTableName)
             .then((db) => {
                 handler = new AfpDeckNotificationCenterHandler(db, true);
 
@@ -363,7 +363,7 @@ describe('Unit test for api with MongoDB', function () {
     let handler: AfpDeckNotificationCenterHandler;
 
     beforeAll((done) => {
-        database(true, process.env.MONGODB_URL)
+        database(true, process.env.MONGODB_URL, userPrefrencesTableName, webPushTableName, subscriptionsTableName)
             .then((db) => {
                 handler = new AfpDeckNotificationCenterHandler(db, true);
 
