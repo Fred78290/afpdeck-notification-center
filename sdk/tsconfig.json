@@ -4,13 +4,17 @@
         "strict": true,
         "preserveConstEnums": true,
         "noEmit": true,
-        "sourceMap": false,
+        "sourceMap": true,
         "module": "esnext",
         "moduleResolution": "node",
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
-        "lib": ["esnext"]
+		"resolveJsonModule": true,
+		"skipDefaultLibCheck": true,
+		"strictNullChecks": true,
+		"strictPropertyInitialization": false,
+		"lib": ["esnext"]
     },
     "exclude": ["node_modules", "**/*.test.ts"]
 }

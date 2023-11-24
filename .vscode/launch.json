@@ -10,7 +10,7 @@
       "name": "Server",
       "skipFiles": ["<node_internals>/**"],
       "envFile": "${workspaceFolder}/lambda/configs/.env",
-      "program": "${workspaceFolder}/build/src/server.js",
+      "program": "${workspaceFolder}/build/src/index.js",
       "preLaunchTask": "tsc: build - tsconfig.json",
       "outFiles": ["${workspaceFolder}/build/**/*.js"]
     },

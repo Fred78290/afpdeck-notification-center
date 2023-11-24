@@ -1,8 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import mongoose from 'mongoose';
 import { ALL_BROWSERS, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument } from '../index';
-import { Request, QuietTime } from 'afp-apicore-sdk/dist/types';
-import { VapidKeys, PushSubscription } from 'web-push';
 
 const UserPreferencesSchema = new mongoose.Schema<UserPreferencesDocument>({
     name: { type: String, required: true, index: true },

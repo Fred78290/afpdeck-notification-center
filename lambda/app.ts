@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import ApiCore from 'afp-apicore-sdk';
 
-import { APIGatewayProxyEvent, APIGatewayProxyEventQueryStringParameters, APIGatewayProxyResult } from 'aws-lambda';
+import { APIGatewayRequestAuthorizerEvent, Context, APIGatewayAuthorizerResult, APIGatewayProxyEvent, APIGatewayProxyEventQueryStringParameters, APIGatewayProxyResult } from 'aws-lambda';
 import { Subscription, AuthType, ServiceType, RegisterService, PostedPushNoticationData, NoticationData, NoticationUserPayload } from 'afp-apicore-sdk/dist/types';
 import webpush, { VapidKeys, PushSubscription, SendResult } from 'web-push';
-import database, { ALL_BROWSERS, AccessStorage, WebPushUserDocument, parseBoolean } from './databases';
+import { ALL_BROWSERS, AccessStorage, WebPushUserDocument, parseBoolean } from './databases';
+import { parse } from 'auth-header';
+import { base64decode } from 'nodejs-base64';
 
 const AFPDECK_NOTIFICATIONCENTER_SERVICE = 'afpdeck-user-service';
 const AFPDECK_NOTIFICATIONCENTER_SHARED_SERVICE = 'afpdeck-shared-service';
@@ -13,8 +15,8 @@ const OK = {
     statusCode: 200,
     body: JSON.stringify({
         response: {
-            message: 'OK',
-            status: 0,
+            code: 0,
+            reason: 'OK',
         },
     }),
 };
@@ -44,7 +46,7 @@ interface Identify {
     authType?: AuthType;
 }
 
-class HttpError extends Error {
+export class HttpError extends Error {
     private _statusCode: number;
 
     constructor(message: string, statusCode: number) {
@@ -63,7 +65,7 @@ export interface WebPushUser {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function handleError(err: any) {
+export function handleError(err: any) {
     console.error(err);
 
     if (err.code && err.message) {
@@ -99,22 +101,178 @@ function handleError(err: any) {
     }
 }
 
-export class AfpDeckNotificationCenterHandler {
-    private debug: boolean;
-    private closed: boolean;
-    private accessStorage: AccessStorage;
+function findAuthorization(req: APIGatewayRequestAuthorizerEvent): string | undefined {
+    if (req.headers) {
+        const keys = Object.keys(req.headers);
+        const key = keys.find((k) => k.toLowerCase() === 'authorization');
 
-    constructor(accessStorage: AccessStorage, debug: boolean) {
+        if (key) {
+            return req.headers[key];
+        }
+    }
+
+    return undefined;
+}
+
+export class Authorizer {
+    protected debug: boolean;
+    protected apicoreBaseURL: string;
+    protected clientID: string;
+    protected clientSecret: string;
+    protected pushUserName: string;
+    protected pushPassword: string;
+
+    constructor(options: { debug: boolean; apicoreBaseURL: string; clientID: string; clientSecret: string; pushUserName: string; pushPassword: string }) {
+        this.debug = options.debug;
+        this.apicoreBaseURL = options.apicoreBaseURL;
+        this.clientID = options.clientID;
+        this.clientSecret = options.clientSecret;
+        this.pushUserName = options.pushUserName;
+        this.pushPassword = options.pushPassword;
+    }
+
+    public async authorize(event: APIGatewayRequestAuthorizerEvent, context?: Context): Promise<APIGatewayAuthorizerResult> {
+        const methodArn = event.methodArn.substring(0, event.methodArn.indexOf('/')) + '/*/*/*';
+
+        if (this.debug) {
+            console.log(event);
+            console.log(context);
+        }
+
+        const result: APIGatewayAuthorizerResult = {
+            principalId: 'unknown',
+            policyDocument: {
+                Version: '2012-10-17',
+                Statement: [
+                    {
+                        Action: 'execute-api:Invoke',
+                        Effect: 'Deny',
+                        Resource: methodArn,
+                    },
+                ],
+            },
+        };
+
+        try {
+            const authorization = findAuthorization(event);
+
+            if (authorization) {
+                const token = parse(authorization);
+                const apicore = new ApiCore({
+                    baseUrl: this.apicoreBaseURL,
+                    clientId: this.clientID,
+                    clientSecret: this.clientSecret,
+                });
+
+                if (token.scheme.toLowerCase() === 'basic' && token.token) {
+                    const encode: string = Array.isArray(token.token) ? token.token[0] : token.token;
+                    const [username, password] = base64decode(encode).split(':', 2);
+
+                    if (event.resource.startsWith('/push')) {
+                        if (username === this.pushUserName && password === this.pushPassword) {
+                            result.principalId = username;
+                            result.policyDocument.Statement[0].Effect = 'Allow';
+                            result.context = {
+                                username: username,
+                                authToken: encode,
+                            };
+                        } else {
+                            console.log(`Not authorized: ${username}`);
+                        }
+                    } else {
+                        const authToken = await apicore.authenticate({ username, password });
+
+                        if (authToken.authType === 'credentials') {
+                            result.principalId = username;
+                            result.policyDocument.Statement[0].Effect = 'Allow';
+                            result.context = {
+                                username: username,
+                                ...authToken,
+                            };
+                        } else if (this.debug) {
+                            console.log(`Not authorized: ${username}`);
+                        }
+                    }
+                } else if (token.scheme.toLowerCase() === 'bearer' && token.token) {
+                    const encode: string = Array.isArray(token.token) ? token.token[0] : token.token;
+                    const { username } = await apicore.checkToken(encode);
+
+                    result.principalId = username;
+                    result.policyDocument.Statement[0].Effect = 'Allow';
+                    result.context = {
+                        username: username,
+                        accessToken: encode,
+                    };
+                } else if (this.debug) {
+                    console.debug(`Unsupported scheme: ${token.scheme} or token is undefined`);
+                }
+            } else if (this.debug) {
+                console.debug('authorization header not found');
+            }
+        } catch (err) {
+            console.error(err);
+        }
+
+        if (this.debug) {
+            console.log(JSON.stringify(result));
+        }
+
+        return result;
+    }
+}
+
+export class AfpDeckNotificationCenterHandler extends Authorizer {
+    protected closed: boolean;
+    protected accessStorage: AccessStorage;
+    protected afpDeckPushURL: string;
+    protected useSharedService: boolean;
+    protected serviceUserName: string;
+    protected servicePassword: string;
+
+    constructor(
+        accessStorage: AccessStorage,
+        options: {
+            debug: boolean;
+            apicoreBaseURL: string;
+            clientID: string;
+            clientSecret: string;
+            afpDeckPushURL: string;
+            apicorePushUserName: string;
+            apicorePushPassword: string;
+            useSharedService: boolean;
+            serviceUserName: string;
+            servicePassword: string;
+        },
+    ) {
+        super({
+            debug: options.debug,
+            apicoreBaseURL: options.apicoreBaseURL,
+            clientID: options.clientID,
+            clientSecret: options.clientSecret,
+            pushPassword: options.apicorePushPassword,
+            pushUserName: options.apicorePushUserName,
+        });
+
         this.accessStorage = accessStorage;
-        this.debug = debug;
+        this.debug = options.debug;
+        this.afpDeckPushURL = options.afpDeckPushURL;
+        this.useSharedService = options.useSharedService;
         this.closed = false;
+        this.serviceUserName = options.serviceUserName;
+        this.servicePassword = options.servicePassword;
+
+        process.on('SIGTERM', async () => {
+            this.close().finally(() => {
+                process.exit(0);
+            });
+        });
     }
 
     private getNotificationCenter(identity: Identify) {
         const apicore = new ApiCore({
-            baseUrl: process.env.APICORE_BASE_URL,
-            clientId: process.env.APICORE_CLIENT_ID,
-            clientSecret: process.env.APICORE_CLIENT_SECRET,
+            baseUrl: this.apicoreBaseURL,
+            clientId: this.clientID,
+            clientSecret: this.clientSecret,
         });
 
         apicore.token = {
@@ -124,27 +282,25 @@ export class AfpDeckNotificationCenterHandler {
             tokenExpires: identity.tokenExpires ? identity.tokenExpires : Date.now() + 1000 * 3600,
         };
 
-        return apicore.createNotificationCenter(process.env.APICORE_SERVICE_USERNAME, process.env.APICORE_SERVICE_PASSWORD);
+        return apicore.createNotificationCenter(this.serviceUserName, this.servicePassword);
     }
 
     private async checkIfServiceIsRegistered(identity: Identify, serviceDefinition: ServiceDefinition) {
         const notificationCenter = this.getNotificationCenter(identity);
 
         if (serviceDefinition.useSharedService) {
-            if (process.env.APICORE_CLIENT_ID) {
-                const services = await notificationCenter.listSharedServices(process.env.APICORE_CLIENT_ID, identity.principalId);
-                const service = services?.find((s) => s.serviceName === serviceDefinition.definition.name);
+            const services = await notificationCenter.listSharedServices(this.clientID, identity.principalId);
+            const service = services?.find((s) => s.serviceName === serviceDefinition.definition.name);
 
-                if (!service) {
-                    try {
-                        const serviceName = await notificationCenter.registerSharedService(serviceDefinition.definition);
+            if (!service) {
+                try {
+                    const serviceName = await notificationCenter.registerSharedService(serviceDefinition.definition);
 
-                        if (this.debug) {
-                            console.info(`Created shared service: ${serviceDefinition.definition.name}, uno: ${serviceName}`);
-                        }
-                    } catch (e) {
-                        console.info(`Shared service: ${serviceDefinition.definition.name}, already exists`);
+                    if (this.debug) {
+                        console.info(`Created shared service: ${serviceDefinition.definition.name}, uno: ${serviceName}`);
                     }
+                } catch (e) {
+                    console.info(`Shared service: ${serviceDefinition.definition.name}, already exists`);
                 }
             }
         } else {
@@ -400,24 +556,18 @@ export class AfpDeckNotificationCenterHandler {
             }
         }
 
-        if (process.env.AFPDECK_PUSH_URL && process.env.APICORE_PUSH_USERNAME && process.env.APICORE_PUSH_PASSWORD) {
-            const useSharedService = parseBoolean(process.env.APICORE_USE_SHAREDSERVICE);
-
-            return {
-                useSharedService: useSharedService,
-                definition: {
-                    name: useSharedService ? AFPDECK_NOTIFICATIONCENTER_SHARED_SERVICE : AFPDECK_NOTIFICATIONCENTER_SERVICE,
-                    type: 'rest',
-                    datas: {
-                        href: process.env.AFPDECK_PUSH_URL,
-                        user: process.env.APICORE_PUSH_USERNAME,
-                        password: process.env.APICORE_PUSH_PASSWORD,
-                    },
+        return {
+            useSharedService: this.useSharedService,
+            definition: {
+                name: this.useSharedService ? AFPDECK_NOTIFICATIONCENTER_SHARED_SERVICE : AFPDECK_NOTIFICATIONCENTER_SERVICE,
+                type: 'rest',
+                datas: {
+                    href: this.afpDeckPushURL,
+                    user: this.pushUserName,
+                    password: this.pushPassword,
                 },
-            };
-        }
-
-        throw new HttpError('Missing envars', 500);
+            },
+        };
     }
 
     private async storeWebPushUserKey(principalId: string, browserID: string, data: WebPushUser): Promise<APIGatewayProxyResult> {
@@ -452,8 +602,8 @@ export class AfpDeckNotificationCenterHandler {
                 statusCode: 200,
                 body: JSON.stringify({
                     response: {
-                        message: 'OK',
-                        status: 0,
+                        code: 0,
+                        reason: 'OK',
                     },
                 }),
             };
@@ -494,8 +644,8 @@ export class AfpDeckNotificationCenterHandler {
                         response: {
                             preferences: prefs.preferences,
                             status: {
-                                code: 0,
-                                reason: 'OK',
+                                status: 0,
+                                message: 'OK',
                             },
                         },
                     }),
@@ -613,35 +763,3 @@ export class AfpDeckNotificationCenterHandler {
         }
     }
 }
-
-process.on('SIGTERM', async () => {
-    if (handler) {
-        handler.close().finally(() => {
-            process.exit(0);
-        });
-    }
-});
-
-/**
- *
- * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
- * @param {Object} event - API Gateway Lambda Proxy Input Format
- *
- * Return doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html
- * @returns {Object} object - API Gateway Lambda Proxy Output Format
- *
- */
-export const apiHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    try {
-        if (!handler) {
-            handler = new AfpDeckNotificationCenterHandler(
-                await database(parseBoolean(process.env.USE_MONGODB), process.env.MONGODB_URL, process.env.USERPREFS_TABLENAME, process.env.WEBPUSH_TABLE_NAME, process.env.SUBSCRIPTIONS_TABLE_NAME),
-                parseBoolean(event.queryStringParameters?.debug) || parseBoolean(process.env.DEBUG_LAMBDA),
-            );
-        }
-
-        return handler.handleEvent(event);
-    } catch (e) {
-        return handleError(e);
-    }
-};

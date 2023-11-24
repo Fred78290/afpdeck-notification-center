@@ -5,7 +5,7 @@
 	},
 	"subscription": {
 		"endpoint": "http://localhost:1234",
-		"key": {
+		"keys": {
 			"p256dh": "7F2D2E67-2166-4855-8397-F3B89BA997F4",
 			"auth": "F9B7B09A-2E93-449D-AE41-87A8D6D84DC3"
 		}

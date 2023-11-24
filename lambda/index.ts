@@ -1,4 +1,4 @@
-import { apiHandler } from './app';
+import { apiHandler } from './api';
 import { authHandler } from './authorizer';
 
 export default {
