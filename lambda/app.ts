@@ -15,8 +15,10 @@ const OK = {
     statusCode: 200,
     body: JSON.stringify({
         response: {
-            code: 0,
-            reason: 'OK',
+            status: {
+                code: 0,
+                reason: 'OK',
+            },
         },
     }),
 };
@@ -602,8 +604,10 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                 statusCode: 200,
                 body: JSON.stringify({
                     response: {
-                        code: 0,
-                        reason: 'OK',
+                        status: {
+                            code: 0,
+                            reason: 'OK',
+                        },
                     },
                 }),
             };
