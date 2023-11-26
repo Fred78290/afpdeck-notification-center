@@ -8,7 +8,7 @@ export const authHandler = async (event: APIGatewayRequestAuthorizerEvent, conte
     if (!handler) {
         if (process.env.APICORE_BASE_URL && process.env.APICORE_CLIENT_ID && process.env.APICORE_CLIENT_SECRET && process.env.APICORE_PUSH_USERNAME && process.env.APICORE_PUSH_PASSWORD) {
             handler = new Authorizer({
-                debug: parseBoolean(process.env.DEBUG_LAMBDA),
+                debug: parseBoolean(process.env.DEBUG),
                 apicoreBaseURL: process.env.APICORE_BASE_URL,
                 clientID: process.env.APICORE_CLIENT_ID,
                 clientSecret: process.env.APICORE_CLIENT_SECRET,

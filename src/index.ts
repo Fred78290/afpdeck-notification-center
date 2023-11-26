@@ -9,7 +9,7 @@ console.log(process.env);
 const LISTEN_PORT = process.env.LISTEN_PORT ?? 8080;
 
 const options = {
-	debug: parseBoolean(process.env.DEBUG_LAMBDA),
+	debug: parseBoolean(process.env.DEBUG),
 	apicoreBaseURL: process.env.APICORE_BASE_URL ?? '',
 	clientID: process.env.APICORE_CLIENT_ID ?? '',
 	clientSecret: process.env.APICORE_CLIENT_SECRET ?? '',

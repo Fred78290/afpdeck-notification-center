@@ -383,7 +383,7 @@ Resources:
           USERPREFS_TABLENAME: !Ref UserPreferencesTableName
           USE_MONGODB: !Ref UseMongoDB
           MONGODB_URL: !Ref MongoURL
-          DEBUG_LAMBDA: !Ref DebugLambda
+          DEBUG: !Ref Debug
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
       BuildProperties:
@@ -460,6 +460,12 @@ Resources:
             RestApiId: !Ref AfpDeckNotificationCenterApi
             Path: /preferences/{identifier}
             Method: POST
+        DeleteUserPreferences:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AfpDeckNotificationCenterApi
+            Path: /preferences/{identifier}
+            Method: DELETE
       Environment:
         Variables:
           NODE_OPTIONS: ' --enable-source-maps'
@@ -477,7 +483,7 @@ Resources:
           USERPREFS_TABLENAME: !Ref UserPreferencesTableName
           USE_MONGODB: !Ref UseMongoDB
           MONGODB_URL: !Ref MongoURL
-          DEBUG_LAMBDA: !Ref DebugLambda
+          DEBUG: !Ref Debug
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
       BuildProperties:

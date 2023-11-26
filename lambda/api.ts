@@ -35,7 +35,7 @@ export const apiHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewa
                         process.env.SUBSCRIPTIONS_TABLE_NAME,
                     ),
                     {
-                        debug: parseBoolean(event.queryStringParameters?.debug) || parseBoolean(process.env.DEBUG_LAMBDA),
+                        debug: parseBoolean(event.queryStringParameters?.debug) || parseBoolean(process.env.DEBUG),
                         apicoreBaseURL: process.env.APICORE_BASE_URL,
                         clientID: process.env.APICORE_CLIENT_ID,
                         clientSecret: process.env.APICORE_CLIENT_SECRET,
