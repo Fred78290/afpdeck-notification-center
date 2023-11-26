@@ -158,4 +158,16 @@ export default class AfpDeckNotificationCenter {
 
         return data.response.preferences
     }
+
+    public async deleteUserPreferences (name: string) {
+        await this.apicore.authenticate()
+        const browserID = await this.getBrowserID()
+
+        const data: CommonResponse = await del(`${this.baseUrl}/api/preferences/${name}`, {
+            headers: this.apicore.authorizationBearerHeaders,
+            params: this.buildParams(browserID)
+        })
+
+        return data.response
+    }
 }

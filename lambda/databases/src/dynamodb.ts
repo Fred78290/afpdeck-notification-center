@@ -143,6 +143,22 @@ export class DynamoDBAccessStorage implements AccessStorage {
         });
     }
 
+    public deleteUserPreferences(principalId: string, name: string): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            this.userPreferencesTableClient
+                .delete({
+                    owner: principalId,
+                    name: name,
+                })
+                .then(() => {
+                    resolve();
+                })
+                .catch((e) => {
+                    reject(e);
+                });
+        });
+    }
+
     public findPushKeyForIdentity(principalId: string, browserID: string): Promise<WebPushUserDocument[]> {
         return new Promise<WebPushUserDocument[]>((resolve, reject) => {
             this.webPushUserTableClient

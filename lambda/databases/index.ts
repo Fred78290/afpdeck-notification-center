@@ -42,6 +42,7 @@ export interface AccessStorage {
 
     storeUserPreferences(document: UserPreferencesDocument): Promise<void>;
     getUserPreferences(principalId: string, name: string): Promise<UserPreferencesDocument>;
+    deleteUserPreferences(principalId: string, name: string): Promise<void>;
 
     findPushKeyForIdentity(principalId: string, browserID: string): Promise<WebPushUserDocument[]>;
     storeWebPushUserDocument(document: WebPushUserDocument): Promise<void>;

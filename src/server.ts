@@ -10,6 +10,7 @@ import {
 } from "aws-lambda";
 
 let handler: AfpDeckNotificationCenterHandler;
+let debug: boolean;
 
 interface LambdaRequest extends Request {
 	context?: APIGatewayAuthorizerResult;
@@ -84,6 +85,10 @@ function handleRequest(
 	handler.handleEvent(event).then((result) => {
 		if (result.headers) response.set(result.headers);
 
+		if (debug) {
+			console.log('%s: %s, %s', request.method, request.path, result.body);
+		}
+
 		response.status(result.statusCode).send(JSON.parse(result.body));
 	});
 }
@@ -111,8 +116,7 @@ function buildHeaders(request: Request) {
 
 function buildQueryParameters(request: LambdaRequest) {
 	const queryStringParameters: APIGatewayProxyEventQueryStringParameters = {};
-	const multiValueQueryStringParameters: APIGatewayProxyEventMultiValueQueryStringParameters =
-		{};
+	const multiValueQueryStringParameters: APIGatewayProxyEventMultiValueQueryStringParameters = {};
 	const keys = Object.keys(request.query);
 
 	keys.forEach((k) => {
@@ -211,15 +215,15 @@ export async function createApp(options: {
 	mongoURL?: string,
 	userPreferencesTableName?: string,
 	webPushUserTableName?: string,
-	subscriptionTableName?: string
+	subscriptionTableName?: string,
+	debug: boolean,
 }): Promise<Express> {
+	debug = options.debug;
+
 	return new Promise<Express>((resolve, reject) => {
 		database(options.useMongoDB, options.mongoURL, options.userPreferencesTableName, options.webPushUserTableName, options.subscriptionTableName)
 			.then((db) => {
-				handler = new AfpDeckNotificationCenterHandler(db, {
-					debug: parseBoolean(process.env.DEBUG_LAMBDA),
-					...options,
-				});
+				handler = new AfpDeckNotificationCenterHandler(db, options);
 
 				const app = express();
 				const router = Router();
@@ -232,6 +236,7 @@ export async function createApp(options: {
 				router.delete("/delete/:identifier", handleRequest);
 				router.post("/preferences/:identifier", handleRequest);
 				router.get("/preferences/:identifier", handleRequest);
+				router.delete("/preferences/:identifier", handleRequest);
 				router.get("/", handleRequest);
 				router.all("/*", notFound);
 

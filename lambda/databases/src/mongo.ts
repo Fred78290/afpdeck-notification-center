@@ -106,12 +106,30 @@ export class MongoDBAccessStorage implements AccessStorage {
             if (this.userPreferencesModel) {
                 const doc = new this.userPreferencesModel(document);
 
-                doc.save()
+                this.userPreferencesModel
+                    .findOneAndUpdate(
+                        {
+                            owner: document.owner,
+                            name: document.name,
+                        },
+                        {
+                            preferences: document.preferences,
+                            updated: new Date(),
+                        },
+                    )
+                    .exec()
                     .then(() => {
                         resolve();
                     })
-                    .catch((e: any) => {
-                        reject(e);
+                    .catch((e) => {
+                        doc.save()
+                            .then(() => {
+                                resolve();
+                            })
+                            .catch((e: any) => {
+                                reject(e);
+                            });
+                        resolve();
                     });
             } else {
                 reject(new Error('Not connected'));
@@ -129,8 +147,33 @@ export class MongoDBAccessStorage implements AccessStorage {
                     })
                     .exec()
                     .then((result) => {
-                        if (result != null) {
+                        if (result) {
                             resolve(result);
+                        } else {
+                            reject(new Error('Not found'));
+                        }
+                    })
+                    .catch((e: any) => {
+                        reject(e);
+                    });
+            } else {
+                reject(new Error('Not connected'));
+            }
+        });
+    }
+
+    public deleteUserPreferences(principalId: string, name: string): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            if (this.userPreferencesModel) {
+                this.userPreferencesModel
+                    .findOneAndDelete({
+                        owner: principalId,
+                        name: name,
+                    })
+                    .exec()
+                    .then((result) => {
+                        if (result) {
+                            resolve();
                         } else {
                             reject(new Error('Not found'));
                         }
@@ -193,15 +236,20 @@ export class MongoDBAccessStorage implements AccessStorage {
     public updateWebPushUserDocument(document: WebPushUserDocument): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             if (this.webPushUserModel) {
-                const doc = new this.webPushUserModel(document);
-
                 this.webPushUserModel
                     .findOneAndUpdate(
                         {
                             owner: document.owner,
                             browserID: document.browserID,
                         },
-                        doc,
+                        {
+                            apiKeys: document.apiKeys,
+                            subscription: document.subscription,
+                            updated: new Date(),
+                        },
+                        {
+                            new: true,
+                        },
                     )
                     .exec()
                     .then(() => {

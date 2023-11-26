@@ -662,6 +662,26 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         }
     }
 
+    private async deleteUserPreferences(principalId: string, name: string): Promise<APIGatewayProxyResult> {
+        try {
+            await this.accessStorage.deleteUserPreferences(principalId, name);
+
+            return {
+                statusCode: 200,
+                body: JSON.stringify({
+                    response: {
+                        status: {
+                            status: 0,
+                            message: 'OK',
+                        },
+                    },
+                }),
+            };
+        } catch (e: any) {
+            return NOT_FOUND;
+        }
+    }
+
     public close(): Promise<void> {
         if (this.closed) {
             return Promise.resolve();
@@ -738,20 +758,22 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                             throw new HttpError('Missing parameters to delete subscription', 400);
                         }
                     } else if (event.resource.startsWith('/preferences')) {
-                        if (method === 'POST') {
-                            if (event.body && event.pathParameters?.identifier) {
-                                response = this.storeUserPreferences(identity.principalId, event.pathParameters?.identifier, JSON.parse(event.body));
-                            } else {
-                                throw new HttpError('Missing parameters', 400);
-                            }
-                        } else if (method === 'GET') {
-                            if (event.pathParameters?.identifier) {
+                        if (event.pathParameters?.identifier) {
+                            if (method === 'POST') {
+                                if (event.body) {
+                                    response = this.storeUserPreferences(identity.principalId, event.pathParameters?.identifier, JSON.parse(event.body));
+                                } else {
+                                    throw new HttpError('Missing parameters', 400);
+                                }
+                            } else if (method === 'GET') {
                                 response = this.getUserPreferences(identity.principalId, event.pathParameters?.identifier);
+                            } else if (method === 'DELETE') {
+                                response = this.deleteUserPreferences(identity.principalId, event.pathParameters?.identifier);
                             } else {
-                                throw new HttpError('Missing parameters', 400);
+                                throw new HttpError('Method Not Allowed', 406);
                             }
                         } else {
-                            throw new HttpError('Method Not Allowed', 406);
+                            throw new HttpError('Missing parameters', 400);
                         }
                     } else {
                         response = this.defaultHandler(event);
