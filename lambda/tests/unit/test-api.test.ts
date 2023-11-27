@@ -5,6 +5,7 @@ import database, { parseBoolean } from '../../databases';
 import { DynamoDB, DeleteTableCommandOutput, CreateTableCommandInput } from '@aws-sdk/client-dynamodb';
 import testSubscription from './testSubscription.json';
 import testPush from './testPush.json';
+import testWebPushKey from './testWebPushKey.json';
 import * as dotenv from 'dotenv';
 import ApiCore from 'afp-apicore-sdk';
 import { Token } from 'afp-apicore-sdk/dist/types';
@@ -14,6 +15,7 @@ const DEFAULT_TIMEOUT = 30000;
 
 dotenv.config({ path: __dirname + '/../../configs/.env' });
 
+const browserID = 'B46FBAE9-C6A7-4FFC-AB72-C59D30613B49';
 const webPushTableName = 'test-afpdeck-webpush';
 const subscriptionsTableName = 'test-afpdeck-subscriptions';
 const userPrefrencesTableName = 'test-afpdeck-preferences';
@@ -31,6 +33,10 @@ const serviceDefinition = {
 	serviceName: serviceName,
 	serviceType: 'mail',
 	serviceData: JSON.stringify({ address: process.env.APICORE_EMAIL }),
+};
+
+const browserIDQueryParameters = {
+	browserID: browserID,
 };
 
 const options = {
@@ -238,11 +244,36 @@ async function push(handler: AfpDeckNotificationCenterHandler) {
 	expect(result.statusCode).toEqual(200);
 }
 
-async function deleteService(handler: AfpDeckNotificationCenterHandler) {
-	const event = buildEvent('DELETE', `/delete/${serviceName}`, servicePathParameters, serviceDefinition, null);
+async function storeWebPushUserKey(handler: AfpDeckNotificationCenterHandler) {
+	const event = buildEvent('POST', '/webpush', null, browserIDQueryParameters, testWebPushKey);
 	const result = await handler.handleEvent(event);
 
-	await deleteDynamoDBTables();
+	console.log(result);
+
+	expect(result.statusCode).toEqual(200);
+}
+
+async function updateWebPushUserKey(handler: AfpDeckNotificationCenterHandler) {
+	const event = buildEvent('PUT', '/webpush', null, browserIDQueryParameters, testWebPushKey);
+	const result = await handler.handleEvent(event);
+
+	console.log(result);
+
+	expect(result.statusCode).toEqual(200);
+}
+
+async function getWebPushUserKey(handler: AfpDeckNotificationCenterHandler) {
+	const event = buildEvent('GET', '/webpush', null, browserIDQueryParameters, null);
+	const result = await handler.handleEvent(event);
+
+	console.log(result);
+
+	expect(result.statusCode).toEqual(200);
+}
+
+async function deleteWebPushUserKey(handler: AfpDeckNotificationCenterHandler) {
+	const event = buildEvent('DELETE', '/webpush', null, browserIDQueryParameters, null);
+	const result = await handler.handleEvent(event);
 
 	console.log(result);
 
@@ -260,6 +291,15 @@ async function storeUserPreferences(handler: AfpDeckNotificationCenterHandler) {
 
 async function getUserPreferences(handler: AfpDeckNotificationCenterHandler) {
 	const event = buildEvent('GET', `/preferences/${serviceName}`, servicePathParameters, null, null);
+	const result = await handler.handleEvent(event);
+
+	console.log(result);
+
+	expect(result.statusCode).toEqual(200);
+}
+
+async function deleteUserPreferences(handler: AfpDeckNotificationCenterHandler) {
+	const event = buildEvent('DELETE', `/preferences/${serviceName}`, servicePathParameters, null, null);
 	const result = await handler.handleEvent(event);
 
 	console.log(result);
@@ -372,6 +412,39 @@ describe('Unit test for api with DynamoDB', function () {
 	);
 
 	it(
+		'verifies successful store webpush keys with DynamoDB',
+		async () => {
+			await storeWebPushUserKey(handler);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful get webpush keys with DynamoDB',
+		async () => {
+			await getWebPushUserKey(handler);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful update webpush keys with DynamoDB',
+		async () => {
+			await updateWebPushUserKey(handler);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+
+	it(
+		'verifies successful delete webpush keys with DynamoDB',
+		async () => {
+			await deleteWebPushUserKey(handler);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
 		'verifies successful store user preferences with DynamoDB',
 		async () => {
 			await storeUserPreferences(handler);
@@ -383,6 +456,14 @@ describe('Unit test for api with DynamoDB', function () {
 		'verifies successful get user preferences with DynamoDB',
 		async () => {
 			await getUserPreferences(handler);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful delete user preferences with DynamoDB',
+		async () => {
+			await deleteUserPreferences(handler);
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -459,6 +540,38 @@ describe('Unit test for api with MongoDB', function () {
 	);
 
 	it(
+		'verifies successful store webpush keys with MongoDB',
+		async () => {
+			await storeWebPushUserKey(handler);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful get webpush keys with MongoDB',
+		async () => {
+			await getWebPushUserKey(handler);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful update webpush keys with MongoDB',
+		async () => {
+			await updateWebPushUserKey(handler);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful delete webpush keys with MongoDB',
+		async () => {
+			await deleteWebPushUserKey(handler);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
 		'verifies successful store user preferences with MongoDB',
 		async () => {
 			await storeUserPreferences(handler);
@@ -470,6 +583,14 @@ describe('Unit test for api with MongoDB', function () {
 		'verifies successful get user preferences with MongoDB',
 		async () => {
 			await getUserPreferences(handler);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful delete user preferences with MongoDB',
+		async () => {
+			await deleteUserPreferences(handler);
 		},
 		DEFAULT_TIMEOUT,
 	);
