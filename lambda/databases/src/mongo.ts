@@ -118,18 +118,21 @@ export class MongoDBAccessStorage implements AccessStorage {
                         },
                     )
                     .exec()
-                    .then(() => {
-                        resolve();
+                    .then((updated) => {
+                        if (updated) {
+                            resolve();
+                        } else {
+                            doc.save()
+                                .then(() => {
+                                    resolve();
+                                })
+                                .catch((e: any) => {
+                                    reject(e);
+                                });
+                        }
                     })
                     .catch((e) => {
-                        doc.save()
-                            .then(() => {
-                                resolve();
-                            })
-                            .catch((e: any) => {
-                                reject(e);
-                            });
-                        resolve();
+                        reject(e);
                     });
             } else {
                 reject(new Error('Not connected'));
@@ -337,7 +340,7 @@ export class MongoDBAccessStorage implements AccessStorage {
                 this.subscriptionModel
                     .findOneAndDelete({
                         owner: owner,
-                        name: String,
+                        name: name,
                         browserID: browserID,
                     })
                     .exec()
