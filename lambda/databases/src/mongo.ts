@@ -264,6 +264,34 @@ export class MongoDBAccessStorage implements AccessStorage {
         });
     }
 
+    public deleteWebPushUserDocument(principalId: string, browserID: string): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            if (this.webPushUserModel) {
+                const filter =
+                    browserID === ALL_BROWSERS
+                        ? {
+                              owner: principalId,
+                          }
+                        : {
+                              owner: principalId,
+                              browserID: browserID,
+                          };
+
+                this.webPushUserModel
+                    .deleteMany(filter)
+                    .exec()
+                    .then((results) => {
+                        resolve();
+                    })
+                    .catch((e) => {
+                        reject(e);
+                    });
+            } else {
+                reject(new Error('Not connected'));
+            }
+        });
+    }
+
     public getSubscriptions(owner: string, name: string): Promise<SubscriptionDocument[]> {
         return new Promise<SubscriptionDocument[]>((resolve, reject) => {
             if (this.subscriptionModel) {

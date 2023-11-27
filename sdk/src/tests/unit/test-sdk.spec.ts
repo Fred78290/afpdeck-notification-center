@@ -122,6 +122,22 @@ describe('afpdeck-notification-center sdk', () => {
 		expect(result.status.code).toBeGreaterThanOrEqual(0)
 	}, DEFAULT_TIMEOUT)
 
+	it('verifies successful getWebPushUserKey', async () => {
+		console.log('verifies successful getWebPushUserKey')
+		const result = await afpdeck.getWebPushUserKey()
+
+		expect(result).toBeDefined()
+		expect(result.status.code).toBeGreaterThanOrEqual(0)
+	}, DEFAULT_TIMEOUT)
+
+	it('verifies successful deleteWebPushUserKey', async () => {
+		console.log('verifies successful deleteWebPushUserKey')
+		const result = await afpdeck.deleteWebPushUserKey()
+
+		expect(result).toBeDefined()
+		expect(result.status.code).toBeGreaterThanOrEqual(0)
+	}, DEFAULT_TIMEOUT)
+
 	it('verifies successful registerNotification', async () => {
 		console.log('verifies successful registerNotification')
 		const result = await afpdeck.registerNotification(subscriptionName, serviceName, testSubscription, serviceDefinition)

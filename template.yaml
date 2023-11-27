@@ -424,6 +424,18 @@ Resources:
             RestApiId: !Ref AfpDeckNotificationCenterApi
             Path: /webpush
             Method: PUT
+        WebPushUserDelete:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AfpDeckNotificationCenterApi
+            Path: /webpush
+            Method: DELETE
+        WebPushUserGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AfpDeckNotificationCenterApi
+            Path: /webpush
+            Method: GET
         PushNotification:
           Type: Api
           Properties:

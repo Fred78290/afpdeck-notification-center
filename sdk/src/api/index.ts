@@ -99,6 +99,30 @@ export default class AfpDeckNotificationCenter {
         return data.response
     }
 
+	public async getWebPushUserKey () {
+        await this.apicore.authenticate()
+        const browserID = await this.getBrowserID()
+
+        const data: CommonResponse = await get(`${this.baseUrl}/api/webpush`, {
+            headers: this.apicore.authorizationBearerHeaders,
+            params: this.buildParams(browserID)
+        })
+
+        return data.response
+    }
+
+	public async deleteWebPushUserKey () {
+        await this.apicore.authenticate()
+        const browserID = await this.getBrowserID()
+
+        const data: CommonResponse = await del(`${this.baseUrl}/api/webpush`, {
+            headers: this.apicore.authorizationBearerHeaders,
+            params: this.buildParams(browserID)
+        })
+
+        return data.response
+    }
+
     public async registerNotification (name: string, service: string, notification: Subscription, serviceDefinition?: ServiceDefinition) {
         await this.apicore.authenticate()
         const browserID = await this.getBrowserID()

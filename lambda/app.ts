@@ -498,17 +498,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
             console.info(`done: ${JSON.stringify(pushData)}`);
         });
 
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                response: {
-                    status: {
-                        code: 0,
-                        reason: 'Processing',
-                    },
-                },
-            }),
-        };
+        return OK;
     }
 
     private async deleteNotification(identifier: string, identity: Identify, serviceDefinition: ServiceDefinition, browserID: string): Promise<APIGatewayProxyResult> {
@@ -600,20 +590,33 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                 updated: now,
             });
 
-            return {
-                statusCode: 200,
-                body: JSON.stringify({
-                    response: {
-                        status: {
-                            code: 0,
-                            reason: 'OK',
-                        },
-                    },
-                }),
-            };
+            return OK;
         } catch (e: any) {
             return NOT_FOUND;
         }
+    }
+
+    private async deleteWebPushUserKey(principalId: string, browserID: string): Promise<APIGatewayProxyResult> {
+        await this.accessStorage.deleteWebPushUserDocument(principalId, browserID);
+
+        return OK;
+    }
+
+    private async getWebPushUserKey(principalId: string, browserID: string): Promise<APIGatewayProxyResult> {
+        const webPushKeys = await this.accessStorage.findPushKeyForIdentity(principalId, browserID);
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                response: {
+                    keys: webPushKeys,
+                    status: {
+                        code: 0,
+                        reason: 'OK',
+                    },
+                },
+            }),
+        };
     }
 
     private async storeUserPreferences(principalId: string, name: string, prefs: any): Promise<APIGatewayProxyResult> {
@@ -624,17 +627,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
             updated: new Date(),
         });
 
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                response: {
-                    status: {
-                        code: 0,
-                        reason: 'OK',
-                    },
-                },
-            }),
-        };
+        return OK;
     }
 
     private async getUserPreferences(principalId: string, name: string): Promise<APIGatewayProxyResult> {
@@ -666,17 +659,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         try {
             await this.accessStorage.deleteUserPreferences(principalId, name);
 
-            return {
-                statusCode: 200,
-                body: JSON.stringify({
-                    response: {
-                        status: {
-                            status: 0,
-                            message: 'OK',
-                        },
-                    },
-                }),
-            };
+            return OK;
         } catch (e: any) {
             return NOT_FOUND;
         }
@@ -724,14 +707,24 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                     };
 
                     if (event.resource.startsWith('/webpush')) {
-                        if (event.body) {
-                            if (method === 'POST') {
-                                response = this.storeWebPushUserKey(identity.principalId, browserID, JSON.parse(event.body));
-                            } else if (method === 'PUT') {
-                                response = this.updateWebPushUserKey(identity.principalId, browserID, JSON.parse(event.body));
+                        // WebPush keys API
+                        if (method === 'POST' || method === 'PUT') {
+                            if (event.body) {
+                                if (method === 'POST') {
+                                    response = this.storeWebPushUserKey(identity.principalId, browserID, JSON.parse(event.body));
+                                } else {
+                                    response = this.updateWebPushUserKey(identity.principalId, browserID, JSON.parse(event.body));
+                                }
                             } else {
-                                throw new HttpError('Method Not Allowed', 406);
+                                throw new HttpError('Missing parameters to register webpush user key', 400);
                             }
+                        } else if (method === 'GET') {
+                            response = this.getWebPushUserKey(identity.principalId, browserID);
+                        } else if (method === 'DELETE') {
+                            response = this.deleteWebPushUserKey(identity.principalId, browserID);
+                        } else {
+                            throw new HttpError('Method Not Allowed', 406);
+                        }
                     } else if (event.resource.startsWith('/notification')) {
                         // Notification API
                         if (method === 'GET') {
@@ -744,38 +737,26 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                             }
                         } else if (method === 'POST') {
                             if (event.body && event.pathParameters?.identifier) {
-                            throw new HttpError('Method Not Allowed', 406);
-                        } else if (event.body && event.pathParameters?.identifier) {
                                 response = this.registerNotification(event.pathParameters?.identifier, JSON.parse(event.body), identity, serviceIdentifier, browserID);
                             } else {
                                 throw new HttpError('Missing parameters to register subscription', 400);
                             }
-                    } else if (event.resource.startsWith('/list')) {
-                        if (method !== 'GET') {
-                            throw new HttpError('Method Not Allowed', 406);
                         } else {
-                            response = this.listSubscriptions(identity, serviceIdentifier);
-                        }
-                    } else if (event.resource.startsWith('/delete')) {
-                        if (method !== 'DELETE') {
                             throw new HttpError('Method Not Allowed', 406);
-                        } else if (event.pathParameters?.identifier) {
-                            response = this.deleteNotification(event.pathParameters?.identifier, identity, serviceIdentifier, browserID);
-                        } else {
-                            throw new HttpError('Missing parameters to delete subscription', 400);
                         }
                     } else if (event.resource.startsWith('/preferences')) {
+                        // Preferences API
                         if (event.pathParameters?.identifier) {
-                            if (method === 'POST') {
+                            if (method === 'GET') {
+                                response = this.getUserPreferences(identity.principalId, event.pathParameters?.identifier);
+                            } else if (method === 'DELETE') {
+                                response = this.deleteUserPreferences(identity.principalId, event.pathParameters?.identifier);
+                            } else if (method === 'POST') {
                                 if (event.body) {
                                     response = this.storeUserPreferences(identity.principalId, event.pathParameters?.identifier, JSON.parse(event.body));
                                 } else {
                                     throw new HttpError('Missing parameters', 400);
                                 }
-                            } else if (method === 'GET') {
-                                response = this.getUserPreferences(identity.principalId, event.pathParameters?.identifier);
-                            } else if (method === 'DELETE') {
-                                response = this.deleteUserPreferences(identity.principalId, event.pathParameters?.identifier);
                             } else {
                                 throw new HttpError('Method Not Allowed', 406);
                             }

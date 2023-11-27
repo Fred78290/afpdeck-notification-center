@@ -47,6 +47,7 @@ export interface AccessStorage {
     findPushKeyForIdentity(principalId: string, browserID: string): Promise<WebPushUserDocument[]>;
     storeWebPushUserDocument(document: WebPushUserDocument): Promise<void>;
     updateWebPushUserDocument(document: WebPushUserDocument): Promise<void>;
+    deleteWebPushUserDocument(principalId: string, browserID: string): Promise<void>;
 
     getSubscriptions(owner: string, name: string): Promise<SubscriptionDocument[]>;
     storeSubscription(subscription: SubscriptionDocument): Promise<void>;

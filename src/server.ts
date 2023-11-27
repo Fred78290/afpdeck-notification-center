@@ -230,8 +230,8 @@ export async function createApp(options: {
 
 				router.post("/webpush", handleRequest);
 				router.put("/webpush", handleRequest);
-				router.post("/register/:identifier", handleRequest);
-				router.get("/list", handleRequest);
+				router.get("/webpush", handleRequest);
+				router.delete("/webpush", handleRequest);
 
 				router.post("/notification/:identifier", handleRequest);
 				router.delete("/notification/:identifier", handleRequest);

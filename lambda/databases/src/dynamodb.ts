@@ -162,7 +162,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
     public findPushKeyForIdentity(principalId: string, browserID: string): Promise<WebPushUserDocument[]> {
         return new Promise<WebPushUserDocument[]>((resolve, reject) => {
             this.webPushUserTableClient
-                .query(
+                .queryAll(
                     {
                         owner: principalId,
                     },
@@ -247,6 +247,49 @@ export class DynamoDBAccessStorage implements AccessStorage {
                 .catch((e) => {
                     reject(e);
                 });
+        });
+    }
+
+    public deleteWebPushUserDocument(principalId: string, browserID: string): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            if (browserID === ALL_BROWSERS) {
+                this.webPushUserTableClient
+                    .queryAll({
+                        owner: principalId,
+                    })
+                    .then((results) => {
+                        const keys: { owner: string; browserID: string }[] = [];
+
+                        results.member.forEach((doc) => {
+                            keys.push({
+                                owner: doc.owner,
+                                browserID: doc.browserID,
+                            });
+                        });
+
+                        this.webPushUserTableClient
+                            .batchDelete(keys)
+                            .execute()
+                            .finally(() => {
+                                resolve();
+                            });
+                    })
+                    .catch((e) => {
+                        reject(e);
+                    });
+            } else {
+                this.webPushUserTableClient
+                    .delete({
+                        owner: principalId,
+                        browserID: browserID,
+                    })
+                    .then((result) => {
+                        resolve();
+                    })
+                    .catch((e) => {
+                        reject(e);
+                    });
+            }
         });
     }
 
