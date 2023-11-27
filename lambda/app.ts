@@ -732,17 +732,24 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                             } else {
                                 throw new HttpError('Method Not Allowed', 406);
                             }
-                        } else {
-                            throw new HttpError('Missing parameters to register webpush user key', 400);
-                        }
-                    } else if (event.resource.startsWith('/register')) {
-                        if (method !== 'POST') {
+                    } else if (event.resource.startsWith('/notification')) {
+                        // Notification API
+                        if (method === 'GET') {
+                            response = this.listSubscriptions(identity, serviceIdentifier);
+                        } else if (method === 'DELETE') {
+                            if (event.pathParameters?.identifier) {
+                                response = this.deleteNotification(event.pathParameters?.identifier, identity, serviceIdentifier, browserID);
+                            } else {
+                                throw new HttpError('Missing parameters to delete subscription', 400);
+                            }
+                        } else if (method === 'POST') {
+                            if (event.body && event.pathParameters?.identifier) {
                             throw new HttpError('Method Not Allowed', 406);
                         } else if (event.body && event.pathParameters?.identifier) {
-                            response = this.registerNotification(event.pathParameters?.identifier, JSON.parse(event.body), identity, serviceIdentifier, browserID);
-                        } else {
-                            throw new HttpError('Missing parameters to register subscription', 400);
-                        }
+                                response = this.registerNotification(event.pathParameters?.identifier, JSON.parse(event.body), identity, serviceIdentifier, browserID);
+                            } else {
+                                throw new HttpError('Missing parameters to register subscription', 400);
+                            }
                     } else if (event.resource.startsWith('/list')) {
                         if (method !== 'GET') {
                             throw new HttpError('Method Not Allowed', 406);

@@ -202,8 +202,8 @@ function buildEvent(
 	return event;
 }
 
-async function register(handler: AfpDeckNotificationCenterHandler) {
-	const event = buildEvent('POST', `/register/${serviceName}`, servicePathParameters, serviceDefinition, testSubscription);
+async function registerSubscription(handler: AfpDeckNotificationCenterHandler) {
+	const event = buildEvent('POST', `/notification/${serviceName}`, servicePathParameters, serviceDefinition, testSubscription);
 	const result = await handler.handleEvent(event);
 
 	console.log(result);
@@ -211,8 +211,17 @@ async function register(handler: AfpDeckNotificationCenterHandler) {
 	expect(result.statusCode).toEqual(200);
 }
 
-async function list(handler: AfpDeckNotificationCenterHandler) {
-	const event = buildEvent('GET', '/list', null, serviceDefinition, null);
+async function listSubscription(handler: AfpDeckNotificationCenterHandler) {
+	const event = buildEvent('GET', '/notification', null, serviceDefinition, null);
+	const result = await handler.handleEvent(event);
+
+	console.log(result);
+
+	expect(result.statusCode).toEqual(200);
+}
+
+async function deleteSubscription(handler: AfpDeckNotificationCenterHandler) {
+	const event = buildEvent('DELETE', `/notification/${serviceName}`, servicePathParameters, serviceDefinition, null);
 	const result = await handler.handleEvent(event);
 
 	console.log(result);
@@ -333,7 +342,7 @@ describe('Unit test for api with DynamoDB', function () {
 	it(
 		'verifies successful register with DynamoDB',
 		async () => {
-			await register(handler);
+			await registerSubscription(handler);
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -341,7 +350,7 @@ describe('Unit test for api with DynamoDB', function () {
 	it(
 		'verifies successful list with DynamoDB',
 		async () => {
-			await list(handler);
+			await listSubscription(handler);
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -357,7 +366,7 @@ describe('Unit test for api with DynamoDB', function () {
 	it(
 		'verifies successful delete with DynamoDB',
 		async () => {
-			await deleteService(handler);
+			await deleteSubscription(handler);
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -420,7 +429,7 @@ describe('Unit test for api with MongoDB', function () {
 	it(
 		'verifies successful register with MongoDB',
 		async () => {
-			await register(handler);
+			await registerSubscription(handler);
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -428,7 +437,7 @@ describe('Unit test for api with MongoDB', function () {
 	it(
 		'verifies successful list with MongoDB',
 		async () => {
-			return list(handler);
+			return listSubscription(handler);
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -444,7 +453,7 @@ describe('Unit test for api with MongoDB', function () {
 	it(
 		'verifies successful delete with MongoDB',
 		async () => {
-			await deleteService(handler);
+			await deleteSubscription(handler);
 		},
 		DEFAULT_TIMEOUT,
 	);

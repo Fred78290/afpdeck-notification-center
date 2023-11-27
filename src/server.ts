@@ -232,11 +232,17 @@ export async function createApp(options: {
 				router.put("/webpush", handleRequest);
 				router.post("/register/:identifier", handleRequest);
 				router.get("/list", handleRequest);
+
+				router.post("/notification/:identifier", handleRequest);
+				router.delete("/notification/:identifier", handleRequest);
+				router.get("/notification", handleRequest);
+
 				router.post("/push", handleRequest);
-				router.delete("/delete/:identifier", handleRequest);
+
 				router.post("/preferences/:identifier", handleRequest);
 				router.get("/preferences/:identifier", handleRequest);
 				router.delete("/preferences/:identifier", handleRequest);
+
 				router.get("/", handleRequest);
 				router.all("/*", notFound);
 

@@ -103,7 +103,7 @@ export default class AfpDeckNotificationCenter {
         await this.apicore.authenticate()
         const browserID = await this.getBrowserID()
 
-        const data: CommonResponse = await post(`${this.baseUrl}/api/register/${name}`, notification, {
+        const data: CommonResponse = await post(`${this.baseUrl}/api/notification/${name}`, notification, {
             headers: this.apicore.authorizationBearerHeaders,
             params: this.buildParams(browserID, serviceDefinition)
         })
@@ -115,7 +115,7 @@ export default class AfpDeckNotificationCenter {
         await this.apicore.authenticate()
         const browserID = await this.getBrowserID()
 
-        const data: CommonResponse = await del(`${this.baseUrl}/api/register/${name}`, {
+        const data: CommonResponse = await del(`${this.baseUrl}/api/notification/${name}`, {
             headers: this.apicore.authorizationBearerHeaders,
             params: this.buildParams(browserID, serviceDefinition)
         })
@@ -127,7 +127,7 @@ export default class AfpDeckNotificationCenter {
         await this.apicore.authenticate()
         const browserID = await this.getBrowserID()
 
-        const data: ListSubscriptionsResponse = await get(`${this.baseUrl}/api/list`, {
+        const data: ListSubscriptionsResponse = await get(`${this.baseUrl}/api/notification`, {
             headers: this.apicore.authorizationBearerHeaders,
             params: this.buildParams(browserID, serviceDefinition)
         })
