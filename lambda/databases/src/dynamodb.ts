@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { $Command, DynamoDB } from '@aws-sdk/client-dynamodb';
+import { DynamoDB } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb';
 import { defineTable, TableClient } from '@hexlabs/dynamo-ts';
 import { ALL_BROWSERS, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument } from '../index';
