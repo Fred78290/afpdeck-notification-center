@@ -99,7 +99,7 @@ export default class AfpDeckNotificationCenter {
         return data.response
     }
 
-	public async getWebPushUserKey () {
+    public async getWebPushUserKey () {
         await this.apicore.authenticate()
         const browserID = await this.getBrowserID()
 
@@ -111,7 +111,7 @@ export default class AfpDeckNotificationCenter {
         return data.response
     }
 
-	public async deleteWebPushUserKey () {
+    public async deleteWebPushUserKey () {
         await this.apicore.authenticate()
         const browserID = await this.getBrowserID()
 
