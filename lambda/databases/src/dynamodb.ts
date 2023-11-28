@@ -308,7 +308,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
     public getSubscriptions(owner: string, name: string): Promise<SubscriptionDocument[]> {
         return new Promise<SubscriptionDocument[]>((resolve, reject) => {
             this.subscriptionTableClient
-                .query({
+                .queryAll({
                     owner: owner,
                     name: (subKey) => subKey.eq(name),
                 })
