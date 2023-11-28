@@ -326,15 +326,10 @@ export class DynamoDBAccessStorage implements AccessStorage {
     public storeSubscription(subscription: SubscriptionDocument): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             this.subscriptionTableClient
-                .query(
-                    {
-                        owner: subscription.owner,
-                        name: (sortKey) => sortKey.eq(subscription.name),
-                    },
-                    {
-                        filter: (compare) => compare().browserID.eq(subscription.browserID),
-                    },
-                )
+                .get({
+                    owner: subscription.owner,
+                    name: subscription.name,
+                })
                 .then((result) => {
                     this.subscriptionTableClient
                         .update({
