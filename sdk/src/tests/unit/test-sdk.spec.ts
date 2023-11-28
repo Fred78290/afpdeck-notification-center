@@ -21,7 +21,7 @@ const userPrefrencesTableName = 'test-afpdeck-preferences';
 
 dotenv.config({ path: __dirname + '/../../../../lambda/configs/.env' })
 
-expect(process.env.APICORE_BASE_URL).toBeDefined()
+expect(process.env.APICORE_TEST_URL).toBeDefined()
 expect(process.env.APICORE_CLIENT_ID).toBeDefined()
 expect(process.env.APICORE_CLIENT_SECRET).toBeDefined()
 expect(process.env.APICORE_USERNAME).toBeDefined()
@@ -30,7 +30,7 @@ expect(process.env.APICORE_EMAIL).toBeDefined()
 
 const options = {
 	debug: true,
-	apicoreBaseURL: process.env.APICORE_BASE_URL ?? '',
+	apicoreBaseURL: process.env.APICORE_TEST_URL ?? '',
 	clientID: process.env.APICORE_CLIENT_ID ?? '',
 	clientSecret: process.env.APICORE_CLIENT_SECRET ?? '',
 	afpDeckPushURL: `${AFPDECK_NOTIFICATION_URL}/api/push`,
@@ -58,7 +58,7 @@ const serviceDefinition: ServiceDefinition = {
 }
 
 const apicore = new ApiCore({
-	baseUrl: process.env.APICORE_BASE_URL,
+	baseUrl: process.env.APICORE_TEST_URL,
 	clientId: process.env.APICORE_CLIENT_ID,
 	clientSecret: process.env.APICORE_CLIENT_SECRET,
 	saveToken: token => {

@@ -41,7 +41,7 @@ const browserIDQueryParameters = {
 
 const options = {
 	debug: true,
-	apicoreBaseURL: process.env.APICORE_BASE_URL ?? '',
+	apicoreBaseURL: process.env.APICORE_TEST_URL ?? '',
 	clientID: process.env.APICORE_CLIENT_ID ?? '',
 	clientSecret: process.env.APICORE_CLIENT_SECRET ?? '',
 	afpDeckPushURL: process.env.AFPDECK_PUSH_URL ?? '',
@@ -53,7 +53,7 @@ const options = {
 }
 
 const apicore = new ApiCore({
-	baseUrl: process.env.APICORE_BASE_URL,
+	baseUrl: process.env.APICORE_TEST_URL,
 	clientId: process.env.APICORE_CLIENT_ID,
 	clientSecret: process.env.APICORE_CLIENT_SECRET,
 });
@@ -307,7 +307,7 @@ async function deleteUserPreferences(handler: AfpDeckNotificationCenterHandler) 
 	expect(result.statusCode).toEqual(200);
 }
 
-expect(process.env.APICORE_BASE_URL).toBeDefined();
+expect(process.env.APICORE_TEST_URL).toBeDefined();
 expect(process.env.APICORE_CLIENT_ID).toBeDefined();
 expect(process.env.APICORE_CLIENT_SECRET).toBeDefined();
 expect(process.env.APICORE_SERVICE_USERNAME).toBeDefined();

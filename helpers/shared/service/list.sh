@@ -5,4 +5,4 @@ source "$CURDIR/../../env.sh"
 
 curl -ksu "${APICORE_SERVICE_USERNAME}:${APICORE_SERVICE_PASSWORD}" \
 	-H "Content-Type:application/json" \
-	"${APICORE_BASE_URL}/notification/shared/service/list.json?cid=${APICORE_CLIENT_ID}&uid=${APICORE_USERNAME}"
+	"${APICORE_TEST_URL}/notification/shared/service/list.json?cid=${APICORE_CLIENT_ID}&uid=${APICORE_USERNAME}"
