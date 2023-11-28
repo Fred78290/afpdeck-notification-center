@@ -73,14 +73,14 @@ jobs:
         run: |
           TAG=${GITHUB_REF#refs/tags/v}
 
-            git config --global user.name "${{ secrets.GIT_USER_NAME }}"
-            git config --global user.email "${{ secrets.GIT_USER_EMAIL }}"
+          git config --global user.name "${{ secrets.GIT_USER_NAME }}"
+          git config --global user.email "${{ secrets.GIT_USER_EMAIL }}"
 
-            cd sdk
-            npm version --allow-same-version --no-git-tag-version ${TAG}
-            npm i
-            npm run build
-            npm publish --access public
+          cd sdk
+          npm version --allow-same-version --no-git-tag-version ${TAG}
+          npm i
+          npm run build
+          npm publish --access public
 
       - name: Prepare docker buildx
         shell: bash
