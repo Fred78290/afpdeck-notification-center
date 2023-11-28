@@ -378,8 +378,8 @@ Resources:
           APICORE_SERVICE_PASSWORD: !Ref ApiCoreServicePassword
           APICORE_USE_SHAREDSERVICE: !Ref ApiCoreUseSharedService
           AFPDECK_PUSH_URL: !Ref AfpDeckPushUrl
-          SUBSCRIPTIONS_TABLE_NAME: !Ref PublicApiGatewayName
-          WEBPUSH_TABLE_NAME: !Ref SubscriptionsTableName
+          SUBSCRIPTIONS_TABLE_NAME: !Ref SubscriptionsTableName
+          WEBPUSH_TABLE_NAME: !Ref WebPushTableName
           USERPREFS_TABLENAME: !Ref UserPreferencesTableName
           USE_MONGODB: !Ref UseMongoDB
           MONGODB_URL: !Ref MongoURL
@@ -490,8 +490,8 @@ Resources:
           APICORE_SERVICE_PASSWORD: !Ref ApiCoreServicePassword
           APICORE_USE_SHAREDSERVICE: !Ref ApiCoreUseSharedService
           AFPDECK_PUSH_URL: !Ref AfpDeckPushUrl
-          SUBSCRIPTIONS_TABLE_NAME: !Ref PublicApiGatewayName
-          WEBPUSH_TABLE_NAME: !Ref SubscriptionsTableName
+          SUBSCRIPTIONS_TABLE_NAME: !Ref SubscriptionsTableName
+          WEBPUSH_TABLE_NAME: !Ref WebPushTableName
           USERPREFS_TABLENAME: !Ref UserPreferencesTableName
           USE_MONGODB: !Ref UseMongoDB
           MONGODB_URL: !Ref MongoURL
