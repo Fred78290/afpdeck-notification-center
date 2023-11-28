@@ -54,7 +54,7 @@ Parameters:
     Default: 'false'
   AfpDeckPushUrl:
     Type: String
-  DebugLambda:
+  Debug:
     Type: String
     Default: 'false'
   WebPushTableName:
