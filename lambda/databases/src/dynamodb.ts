@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { $Command, DynamoDB } from '@aws-sdk/client-dynamodb';
+import { DynamoDB } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb';
-import { defineTable, TableClient } from '@hexlabs/dynamo-ts';
+import { defineTable, TableClient, QueryKeys } from '@hexlabs/dynamo-ts';
 import { ALL_BROWSERS, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument } from '../index';
 
 const userPreferencesTable = defineTable(
@@ -29,6 +29,12 @@ const webPushUserTable = defineTable(
     },
     'owner',
     'browserID',
+    {
+        'browserID-index': {
+            partitionKey: 'browserID',
+            sortKey: 'created',
+        },
+    },
 );
 
 const subscriptionsTable = defineTable(
@@ -161,15 +167,21 @@ export class DynamoDBAccessStorage implements AccessStorage {
 
     public findPushKeyForIdentity(principalId: string, browserID: string): Promise<WebPushUserDocument[]> {
         return new Promise<WebPushUserDocument[]>((resolve, reject) => {
+            let query: QueryKeys<WebPushUserTable>;
+
+            if (browserID === ALL_BROWSERS) {
+                query = {
+                    owner: principalId,
+                };
+            } else {
+                query = {
+                    owner: principalId,
+                    browserID: (sortKeys) => sortKeys.eq(browserID),
+                };
+            }
+
             this.webPushUserTableClient
-                .queryAll(
-                    {
-                        owner: principalId,
-                    },
-                    {
-                        filter: (compare) => compare().browserID.eq(browserID) || browserID === ALL_BROWSERS,
-                    },
-                )
+                .queryAll(query)
                 .then((result) => {
                     const docs: WebPushUserDocument[] = [];
 
@@ -296,7 +308,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
     public getSubscriptions(owner: string, name: string): Promise<SubscriptionDocument[]> {
         return new Promise<SubscriptionDocument[]>((resolve, reject) => {
             this.subscriptionTableClient
-                .query({
+                .queryAll({
                     owner: owner,
                     name: (subKey) => subKey.eq(name),
                 })
@@ -326,15 +338,10 @@ export class DynamoDBAccessStorage implements AccessStorage {
     public storeSubscription(subscription: SubscriptionDocument): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             this.subscriptionTableClient
-                .query(
-                    {
-                        owner: subscription.owner,
-                        name: (sortKey) => sortKey.eq(subscription.name),
-                    },
-                    {
-                        filter: (compare) => compare().browserID.eq(subscription.browserID),
-                    },
-                )
+                .get({
+                    owner: subscription.owner,
+                    name: subscription.name,
+                })
                 .then((result) => {
                     this.subscriptionTableClient
                         .update({

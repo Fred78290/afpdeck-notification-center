@@ -235,7 +235,7 @@ async function deleteSubscription(handler: AfpDeckNotificationCenterHandler) {
 	expect(result.statusCode).toEqual(200);
 }
 
-async function push(handler: AfpDeckNotificationCenterHandler) {
+async function pushSubscription(handler: AfpDeckNotificationCenterHandler) {
 	const event = buildEvent('POST', `/push/${serviceName}`, servicePathParameters, serviceDefinition, testPush);
 	const result = await handler.handleEvent(event);
 
@@ -380,7 +380,7 @@ describe('Unit test for api with DynamoDB', function () {
 	}, DEFAULT_TIMEOUT);
 
 	it(
-		'verifies successful register with DynamoDB',
+		'verifies successful register subscription with DynamoDB',
 		async () => {
 			await registerSubscription(handler);
 		},
@@ -388,7 +388,7 @@ describe('Unit test for api with DynamoDB', function () {
 	);
 
 	it(
-		'verifies successful list with DynamoDB',
+		'verifies successful list subscriptions with DynamoDB',
 		async () => {
 			await listSubscription(handler);
 		},
@@ -396,15 +396,15 @@ describe('Unit test for api with DynamoDB', function () {
 	);
 
 	it(
-		'verifies successful push with DynamoDB',
+		'verifies successful push subscription with DynamoDB',
 		async () => {
-			await push(handler);
+			await pushSubscription(handler);
 		},
 		DEFAULT_TIMEOUT,
 	);
 
 	it(
-		'verifies successful delete with DynamoDB',
+		'verifies successful delete subscription with DynamoDB',
 		async () => {
 			await deleteSubscription(handler);
 		},
@@ -508,7 +508,7 @@ describe('Unit test for api with MongoDB', function () {
 	}, DEFAULT_TIMEOUT)
 
 	it(
-		'verifies successful register with MongoDB',
+		'verifies successful register subscription with MongoDB',
 		async () => {
 			await registerSubscription(handler);
 		},
@@ -516,7 +516,7 @@ describe('Unit test for api with MongoDB', function () {
 	);
 
 	it(
-		'verifies successful list with MongoDB',
+		'verifies successful list subscriptions with MongoDB',
 		async () => {
 			return listSubscription(handler);
 		},
@@ -524,15 +524,15 @@ describe('Unit test for api with MongoDB', function () {
 	);
 
 	it(
-		'verifies successful push with MongoDB',
+		'verifies successful push subscription with MongoDB',
 		async () => {
-			await push(handler);
+			await pushSubscription(handler);
 		},
 		DEFAULT_TIMEOUT,
 	);
 
 	it(
-		'verifies successful delete with MongoDB',
+		'verifies successful delete subscription with MongoDB',
 		async () => {
 			await deleteSubscription(handler);
 		},

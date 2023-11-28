@@ -263,7 +263,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         this.serviceUserName = options.serviceUserName;
         this.servicePassword = options.servicePassword;
 
-        process.on('SIGTERM', async () => {
+        process.on('SIGTERM', () => {
             this.close().finally(() => {
                 process.exit(0);
             });
