@@ -16,8 +16,8 @@ env:
   GIT_ACTOR: ${{ github.actor }}
   GITHUB_TOKEN: ${{ github.token }}
   REPOSITORY_NAME: ${{ github.event.repository.name }}
-  APICORE_CLIENT_ID: ${{ secrets.DOMAIN_NAME }}
-  APICORE_CLIENT_SECRET: ${{ secrets.DOMAIN_NAME }}
+  APICORE_CLIENT_ID: ${{ secrets.APICORE_CLIENT_ID }}
+  APICORE_CLIENT_SECRET: ${{ secrets.APICORE_CLIENT_SECRET }}
   APICORE_BASE_URL: ${{ secrets.APICORE_BASE_URL }}
   APICORE_TEST_URL: ${{ secrets.APICORE_TEST_URL }}
   APICORE_USERNAME: ${{ secrets.APICORE_USERNAME }}
@@ -32,6 +32,7 @@ env:
   USE_MONGODB: false
   MONGODB_URL: ${{ secrets.MONGODB_URL }}
   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  DEBUG: ${{ vars.DEBUG }}
 
 permissions:
   id-token: write # This is required for requesting the JWT
