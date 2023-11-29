@@ -8,7 +8,8 @@ on:
     tags:
       - v[0-9]+\.[0-9]+\.[0-9]+
       - v[0-9]+\.[0-9]+\.[0-9]+-alpha-[0-9]+
-      - v[0-9]+\.[0-9]+\.[0-9]+-beta-[0-9]+
+      - v[0-9]+\.[0-9]+\.[0-9]+-alpha-[0-9]+
+      - ci-test
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -103,8 +104,10 @@ jobs:
           npm run test
 
       - name: Package SDK
+        if: ${{ github.ref != 'refs/tags/ci-test' }}
         shell: bash
         run: |
+          TAG=${GITHUB_REF#refs/tags/v}
           cd sdk
           npm publish --access public
 
