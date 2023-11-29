@@ -2,6 +2,7 @@
 CURDIR=$(dirname $0)
 
 set -o pipefail -o nounset
+set -e
 
 SAM_PROFILE=
 SAM_REGION=
