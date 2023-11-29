@@ -78,6 +78,8 @@ jobs:
             npm version --allow-same-version --no-git-tag-version ${TAG}
           fi         
 
+          npm i
+
           # Get pkg for lamda
           pushd lambda
           npm i
