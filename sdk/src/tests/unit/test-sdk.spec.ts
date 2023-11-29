@@ -30,21 +30,21 @@ expect(process.env.APICORE_EMAIL).toBeDefined()
 expect(process.env.MONGODB_URL).toBeDefined()
 
 const options = {
-	debug: true,
-	apicoreBaseURL: process.env.APICORE_TEST_URL ?? '',
-	clientID: process.env.APICORE_CLIENT_ID ?? '',
-	clientSecret: process.env.APICORE_CLIENT_SECRET ?? '',
-	afpDeckPushURL: `${AFPDECK_NOTIFICATION_URL}/api/push`,
-	apicorePushUserName: 'fred78290',
-	apicorePushPassword: '1234',
-	useSharedService: true,
-	serviceUserName: '',
-	servicePassword: '',
-	userPreferencesTableName: userPrefrencesTableName,
-	webPushUserTableName: webPushTableName,
-	subscriptionTableName: subscriptionsTableName,
-	useMongoDB: true,
-	mongoURL: process.env.MONGODB_URL,
+    debug: true,
+    apicoreBaseURL: process.env.APICORE_TEST_URL ?? '',
+    clientID: process.env.APICORE_CLIENT_ID ?? '',
+    clientSecret: process.env.APICORE_CLIENT_SECRET ?? '',
+    afpDeckPushURL: `${AFPDECK_NOTIFICATION_URL}/api/push`,
+    apicorePushUserName: 'fred78290',
+    apicorePushPassword: '1234',
+    useSharedService: true,
+    serviceUserName: '',
+    servicePassword: '',
+    userPreferencesTableName: userPrefrencesTableName,
+    webPushUserTableName: webPushTableName,
+    subscriptionTableName: subscriptionsTableName,
+    useMongoDB: true,
+    mongoURL: process.env.MONGODB_URL
 }
 
 const serviceDefinition: ServiceDefinition = {
@@ -59,13 +59,13 @@ const serviceDefinition: ServiceDefinition = {
 }
 
 const apicore = new ApiCore({
-	baseUrl: process.env.APICORE_TEST_URL,
-	clientId: process.env.APICORE_CLIENT_ID,
-	clientSecret: process.env.APICORE_CLIENT_SECRET,
-	saveToken: token => {
-		// You can eventually save the token to be used later
-		console.log(token)
-	}
+    baseUrl: process.env.APICORE_TEST_URL,
+    clientId: process.env.APICORE_CLIENT_ID,
+    clientSecret: process.env.APICORE_CLIENT_SECRET,
+    saveToken: token => {
+        // You can eventually save the token to be used later
+        console.log(token)
+    }
 })
 
 const afpdeck = new AfpDeckNotificationCenter(AFPDECK_NOTIFICATION_URL, apicore, browserID)
