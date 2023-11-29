@@ -78,7 +78,12 @@ jobs:
             npm version --allow-same-version --no-git-tag-version ${TAG}
           fi         
 
-          cd sdk
+          # Get pkg for lamda
+          pushd lambda
+          npm i
+          popd
+
+          pushd sdk
 
           if [ ${GITHUB_REF} != 'refs/tags/ci-test' ]; then
             npm version --allow-same-version --no-git-tag-version ${TAG}
@@ -87,6 +92,7 @@ jobs:
           npm i
           npm run build
 
+          popd
       - name: Test SDK
         shell: bash
         env:
