@@ -27,6 +27,7 @@ expect(process.env.APICORE_CLIENT_SECRET).toBeDefined()
 expect(process.env.APICORE_USERNAME).toBeDefined()
 expect(process.env.APICORE_PASSWORD).toBeDefined()
 expect(process.env.APICORE_EMAIL).toBeDefined()
+expect(process.env.MONGODB_URL).toBeDefined()
 
 const options = {
 	debug: true,
