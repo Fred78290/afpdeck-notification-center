@@ -3,7 +3,12 @@
 npm ci
 npm run build
 
-VERSION=$(jq -r .version package.json)
+if [ -z "$1" ]; then
+	VERSION=$(jq -r .version package.json)
+else
+	VERSION=$1
+fi
+
 REGISTRY=${REGISTRY:=fred78290}
 
 docker buildx build --push --platform linux/amd64,linux/arm64 --pull \

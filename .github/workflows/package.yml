@@ -88,10 +88,16 @@ jobs:
         run: |
           TAG=${GITHUB_REF#refs/tags/v}
 
-          npm version --allow-same-version --no-git-tag-version ${TAG}
-          
+          if [ ${TAG} != 'ci-test' ]; then
+            npm version --allow-same-version --no-git-tag-version ${TAG}
+          fi         
+
           cd sdk
-          npm version --allow-same-version --no-git-tag-version ${TAG}
+
+          if [ ${TAG} != 'ci-test' ]; then
+            npm version --allow-same-version --no-git-tag-version ${TAG}
+          fi         
+
           npm i
           npm run build
 
@@ -107,11 +113,10 @@ jobs:
         if: ${{ github.ref != 'refs/tags/ci-test' }}
         shell: bash
         run: |
-          TAG=${GITHUB_REF#refs/tags/v}
           cd sdk
           npm publish --access public
 
       - name: Build standalone server docker image
         shell: bash
         run: |
-          ./docker.sh
+          ./docker.sh ${GITHUB_REF#refs/tags/}
