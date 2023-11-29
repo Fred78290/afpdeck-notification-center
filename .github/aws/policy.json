@@ -46,6 +46,7 @@
 				"cognito-sync:Describe*",
 				"cognito-sync:Get*",
 				"cognito-sync:List*",
+				"dynamodb:*",
 				"ec2:Describe*",
 				"iam:AddRoleToInstanceProfile",
 				"iam:AttachRolePolicy",
