@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import mongoose from 'mongoose';
+import mongoose, { ConnectOptions } from 'mongoose';
+import url from 'url';
 import { ALL_BROWSERS, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument } from '../index';
 
 const UserPreferencesSchema = new mongoose.Schema<UserPreferencesDocument>({
@@ -85,8 +86,22 @@ export class MongoDBAccessStorage implements AccessStorage {
 
     connect(): Promise<AccessStorage> {
         return new Promise<AccessStorage>((resolve, reject) => {
+            const mongodbURL = new url.URL(this.mongoURL);
+            const options: ConnectOptions = {
+                autoCreate: true,
+            };
+
+            if (mongodbURL.protocol === 'mongodb:') {
+                const dbName = mongodbURL.searchParams.get('dbname');
+
+                if (dbName) {
+                    options.dbName = dbName;
+                    mongodbURL.searchParams.delete('dbname');
+                }
+            }
+
             mongoose
-                .createConnection(this.mongoURL, { autoCreate: true })
+                .createConnection(mongodbURL.toString(), options)
                 .asPromise()
                 .then((m) => {
                     this.connection = m;
