@@ -88,13 +88,13 @@ jobs:
         run: |
           TAG=${GITHUB_REF#refs/tags/v}
 
-          if [ ${TAG} != 'ci-test' ]; then
+          if [ ${GITHUB_REF} != 'refs/tags/ci-test' ]; then
             npm version --allow-same-version --no-git-tag-version ${TAG}
           fi         
 
           cd sdk
 
-          if [ ${TAG} != 'ci-test' ]; then
+          if [ ${GITHUB_REF} != 'refs/tags/ci-test' ]; then
             npm version --allow-same-version --no-git-tag-version ${TAG}
           fi         
 
