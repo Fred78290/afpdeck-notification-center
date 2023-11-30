@@ -1,5 +1,5 @@
-import ApiCore from 'afp-apicore-sdk'
 import * as dotenv from 'dotenv'
+import { Token } from 'afp-apicore-sdk/dist/types'
 import AfpDeckNotificationCenter from '../../afpdeck-notification-center'
 import testSubscription from './testSubscription.json'
 import testWebPushKey from './testWebPushKey.json'
@@ -58,23 +58,24 @@ const serviceDefinition: ServiceDefinition = {
     }
 }
 
-const apicore = new ApiCore({
+const afpdeck = new AfpDeckNotificationCenter({
     baseUrl: process.env.APICORE_TEST_URL,
     clientId: process.env.APICORE_CLIENT_ID,
     clientSecret: process.env.APICORE_CLIENT_SECRET,
-    saveToken: token => {
+    notificationCenterUrl: AFPDECK_NOTIFICATION_URL,
+    browserID: browserID,
+    saveToken: (token: Token) => {
         // You can eventually save the token to be used later
         console.log(token)
     }
 })
 
-const afpdeck = new AfpDeckNotificationCenter(AFPDECK_NOTIFICATION_URL, apicore, browserID)
 let server: http.Server
 
 beforeAll((done) => {
     console.log('Will authenticate')
 
-    apicore.authenticate({ username: process.env.APICORE_USERNAME, password: process.env.APICORE_PASSWORD }).then((token) => {
+    afpdeck.authenticate({ username: process.env.APICORE_USERNAME, password: process.env.APICORE_PASSWORD }).then((token) => {
         console.log('Did authenticate')
         createApp(options).then((app) => {
             console.log('Will listen server')

@@ -1,20 +1,12 @@
 {
-    "compilerOptions": {
-        "target": "esnext",
-        "strict": true,
-        "preserveConstEnums": true,
-        "noEmit": true,
-        "sourceMap": true,
-        "module": "esnext",
-        "moduleResolution": "node",
-        "esModuleInterop": true,
-        "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true,
-		"resolveJsonModule": true,
-		"skipDefaultLibCheck": true,
-		"strictNullChecks": true,
-		"strictPropertyInitialization": false,
-		"lib": ["esnext"]
-    },
-    "exclude": ["node_modules", "**/*.test.ts"]
-}
+	"compilerOptions": {
+	  "moduleResolution": "node",
+	  "module": "ESNext",
+	  "target": "ESNext",
+	  "strict": true,
+	  "esModuleInterop": true
+	},
+	"include": [
+	  "src/**/*"
+	]
+  }
