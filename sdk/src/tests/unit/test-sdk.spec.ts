@@ -64,8 +64,7 @@ const afpdeck = new AfpDeckNotificationCenter({
     clientSecret: process.env.APICORE_CLIENT_SECRET,
     notificationCenterUrl: AFPDECK_NOTIFICATION_URL,
     browserID: browserID,
-    saveToken: (token: Token) => {
-        // You can eventually save the token to be used later
+    saveToken: (token: Token | null) => {
         console.log(token)
     }
 })
