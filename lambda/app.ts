@@ -381,56 +381,57 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
 
     private sendNotificationToClientSync(notication: NoticationData, subscription: NoticationUserPayload): Promise<Promise<SendResult>[]> {
         return new Promise((resolve, reject) => {
-            this.accessStorage.getSubscriptions(subscription.userID, subscription.name).then((subItems) => {
+            this.accessStorage.getSubscription(subscription.userID, subscription.name).then((subItem) => {
                 const result: Promise<SendResult>[] = [];
-                const userPushKeys: Promise<WebPushUserDocument[]>[] = [];
 
-                for (const subItem of subItems) {
+                if (subItem != null) {
+                    const userPushKeys: Promise<WebPushUserDocument[]>[] = [];
+
                     userPushKeys.push(this.accessStorage.findPushKeyForIdentity(subscription.userID, subItem.browserID));
+
+                    Promise.allSettled(userPushKeys).then((settlements) => {
+                        settlements.forEach((settlement) => {
+                            if (settlement.status === 'fulfilled') {
+                                const userPushKey = settlement.value;
+
+                                if (userPushKey.length > 0) {
+                                    const datas = {
+                                        name: subscription.name,
+                                        uno: subscription.identifier,
+                                        isFree: subscription.isFree,
+                                        documentUrl: subscription.documentUrl,
+                                        thumbnailUrl: subscription.thumbnailUrl,
+                                        payload: notication,
+                                    };
+
+                                    userPushKey.forEach((m) => {
+                                        const push = webpush.sendNotification(m.subscription, JSON.stringify(datas), {
+                                            vapidDetails: {
+                                                subject: m.browserID,
+                                                ...m.apiKeys,
+                                            },
+                                        });
+
+                                        result.push(push);
+                                    });
+                                }
+                            } else {
+                                console.error(settlement.reason);
+                            }
+                        });
+                    });
                 }
 
-                Promise.allSettled(userPushKeys).then((settlements) => {
-                    settlements.forEach((settlement) => {
-                        if (settlement.status === 'fulfilled') {
-                            const userPushKey = settlement.value;
-
-                            if (userPushKey.length > 0) {
-                                const datas = {
-                                    name: subscription.name,
-                                    uno: subscription.identifier,
-                                    isFree: subscription.isFree,
-                                    documentUrl: subscription.documentUrl,
-                                    thumbnailUrl: subscription.thumbnailUrl,
-                                    payload: notication,
-                                };
-
-                                userPushKey.forEach((m) => {
-                                    const push = webpush.sendNotification(m.subscription, JSON.stringify(datas), {
-                                        vapidDetails: {
-                                            subject: m.browserID,
-                                            ...m.apiKeys,
-                                        },
-                                    });
-
-                                    result.push(push);
-                                });
-                            }
-                        } else {
-                            console.error(settlement.reason);
-                        }
-                    });
-
-                    resolve(result);
-                });
+                resolve(result);
             });
         });
     }
 
     private async sendNotificationToClient(notication: NoticationData, subscription: NoticationUserPayload): Promise<Promise<SendResult>[]> {
-        const subItems = await this.accessStorage.getSubscriptions(subscription.userID, subscription.name);
         const result: Promise<SendResult>[] = [];
+        const subItem = await this.accessStorage.getSubscription(subscription.userID, subscription.name);
 
-        for (const subItem of subItems) {
+        if (subItem != null) {
             try {
                 const userPushKey = await this.accessStorage.findPushKeyForIdentity(subscription.userID, subItem.browserID);
 
@@ -514,10 +515,10 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         if (this.registerService) {
             return await notificationCenter.deleteSubscription(identifier);
         } else {
-            const subscriptions = await this.accessStorage.getSubscriptions(identity.principalId, identifier);
+            const subscription = await this.accessStorage.getSubscription(identity.principalId, identifier);
 
-            if (subscriptions.length > 0) {
-                return subscriptions[0];
+            if (subscription) {
+                return subscription;
             }
         }
 

@@ -39,8 +39,8 @@ if (
 	process.env.APICORE_PUSH_USERNAME && process.env.APICORE_PUSH_PASSWORD
 ) {
 	createApp(options)
-		.then((app) => {
-			app.listen(LISTEN_PORT, () => {
+		.then((serverApp) => {
+			serverApp.express.listen(LISTEN_PORT, () => {
 				console.log(`server is listening on ${LISTEN_PORT}`);
 			})
 		}).catch((e) => {

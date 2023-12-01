@@ -1,4 +1,4 @@
-import { AfpDeckNotificationCenterHandler } from "../lambda/app";
+import { AfpDeckNotificationCenterHandler, AfpDeckNotificationCenterHandlerOptions } from "../lambda/app";
 import database from '../lambda/databases';
 import express, { Express, Router, Request, Response, NextFunction } from "express";
 import {
@@ -201,27 +201,23 @@ export async function closeApp(): Promise<void> {
 	return Promise.resolve();
 }
 
-export async function createApp(options: {
-	apicoreBaseURL: string;
-	clientID: string;
-	clientSecret: string;
-	afpDeckPushURL: string,
-	apicorePushUserName: string,
-	apicorePushPassword: string,
-	useSharedService: boolean,
-	serviceUserName: string;
-	servicePassword: string;
+export interface AppOptions extends AfpDeckNotificationCenterHandlerOptions {
 	useMongoDB: boolean,
 	mongoURL?: string,
 	userPreferencesTableName?: string,
 	webPushUserTableName?: string,
 	subscriptionTableName?: string,
-	debug: boolean,
-	registerService?: boolean,
-}): Promise<Express> {
-	debug = options.debug;
+}
 
-	return new Promise<Express>((resolve, reject) => {
+export interface ServerApp {
+	handler: AfpDeckNotificationCenterHandler,
+	express: Express,
+}
+
+export async function createApp(options: AppOptions): Promise<ServerApp> {
+	debug = options.debug ?? false;
+
+	return new Promise<ServerApp>((resolve, reject) => {
 		database(options.useMongoDB, options.mongoURL, options.userPreferencesTableName, options.webPushUserTableName, options.subscriptionTableName)
 			.then((db) => {
 				handler = new AfpDeckNotificationCenterHandler(db, options);
@@ -256,7 +252,7 @@ export async function createApp(options: {
 					res.send("Hello, TypeScript Express!");
 				});
 
-				resolve(app);
+				resolve({ handler: handler, express: app });
 			}).catch((e) => {
 				reject(e);
 			})

@@ -49,7 +49,8 @@ export interface AccessStorage {
     updateWebPushUserDocument(document: WebPushUserDocument): Promise<void>;
     deleteWebPushUserDocument(principalId: string, browserID: string): Promise<void>;
 
-    getSubscriptions(owner: string, name: string): Promise<SubscriptionDocument[]>;
+    getSubscriptions(owner: string): Promise<SubscriptionDocument[]>;
+    getSubscription(owner: string, name: string): Promise<SubscriptionDocument | null>;
     storeSubscription(subscription: SubscriptionDocument): Promise<void>;
     deleteSubscription(owner: string, name: string, browserID: string): Promise<void>;
 }

@@ -76,9 +76,9 @@ beforeAll((done) => {
 
     afpdeck.authenticate({ username: process.env.APICORE_USERNAME, password: process.env.APICORE_PASSWORD }).then((token) => {
         console.log('Did authenticate')
-        createApp(options).then((app) => {
+        createApp(options).then((serverApp) => {
             console.log('Will listen server')
-            server = app.listen(LISTEN_PORT, () => {
+            server = serverApp.express.listen(LISTEN_PORT, () => {
                 console.log(`Did server is listening on ${LISTEN_PORT}`)
                 done()
             })

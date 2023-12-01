@@ -305,12 +305,11 @@ export class DynamoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public getSubscriptions(owner: string, name: string): Promise<SubscriptionDocument[]> {
+    public getSubscriptions(owner: string): Promise<SubscriptionDocument[]> {
         return new Promise<SubscriptionDocument[]>((resolve, reject) => {
             this.subscriptionTableClient
                 .queryAll({
                     owner: owner,
-                    name: (subKey) => subKey.eq(name),
                 })
                 .then((results) => {
                     const docs: SubscriptionDocument[] = [];
@@ -328,6 +327,36 @@ export class DynamoDBAccessStorage implements AccessStorage {
                     });
 
                     resolve(docs);
+                })
+                .catch((e) => {
+                    reject(e);
+                });
+        });
+    }
+
+    public getSubscription(owner: string, name: string): Promise<SubscriptionDocument | null> {
+        return new Promise<SubscriptionDocument | null>((resolve, reject) => {
+            this.subscriptionTableClient
+                .get({
+                    owner: owner,
+                    name: name,
+                })
+                .then((results) => {
+                    if (results.item) {
+                        const item = results.item;
+
+                        resolve({
+                            owner: item.owner,
+                            name: item.name,
+                            browserID: item.browserID,
+                            subscription: JSON.parse(item.subscription),
+                            uno: item.uno,
+                            created: new Date(item.created),
+                            updated: new Date(item.updated),
+                        });
+                    }
+
+                    resolve(null);
                 })
                 .catch((e) => {
                     reject(e);

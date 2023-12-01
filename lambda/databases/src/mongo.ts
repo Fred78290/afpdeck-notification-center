@@ -310,11 +310,31 @@ export class MongoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public getSubscriptions(owner: string, name: string): Promise<SubscriptionDocument[]> {
+    public getSubscriptions(owner: string): Promise<SubscriptionDocument[]> {
         return new Promise<SubscriptionDocument[]>((resolve, reject) => {
             if (this.subscriptionModel) {
                 this.subscriptionModel
                     .find({
+                        owner: owner,
+                    })
+                    .exec()
+                    .then((results) => {
+                        resolve(results);
+                    })
+                    .catch((e) => {
+                        reject(e);
+                    });
+            } else {
+                reject(new Error('Not connected'));
+            }
+        });
+    }
+
+    public getSubscription(owner: string, name: string): Promise<SubscriptionDocument | null> {
+        return new Promise<SubscriptionDocument | null>((resolve, reject) => {
+            if (this.subscriptionModel) {
+                this.subscriptionModel
+                    .findOne({
                         owner: owner,
                         name: name,
                     })
