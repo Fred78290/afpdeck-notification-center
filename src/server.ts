@@ -1,5 +1,5 @@
 import { AfpDeckNotificationCenterHandler } from "../lambda/app";
-import database, { parseBoolean } from '../lambda/databases';
+import database from '../lambda/databases';
 import express, { Express, Router, Request, Response, NextFunction } from "express";
 import {
 	APIGatewayProxyEvent,
