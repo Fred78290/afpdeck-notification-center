@@ -1,5 +1,5 @@
 {
-	"name": "hello_world",
+	"name": "afpdeck-notification-center-apigateway",
 	"version": "1.0.0",
 	"description": "Afpdeck Notification Center sample for NodeJS",
 	"main": "app.js",
