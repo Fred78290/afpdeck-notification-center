@@ -217,6 +217,7 @@ export async function createApp(options: {
 	webPushUserTableName?: string,
 	subscriptionTableName?: string,
 	debug: boolean,
+	registerService?: boolean,
 }): Promise<Express> {
 	debug = options.debug;
 

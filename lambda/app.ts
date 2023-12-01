@@ -3,10 +3,12 @@ import ApiCore from 'afp-apicore-sdk';
 
 import { APIGatewayRequestAuthorizerEvent, Context, APIGatewayAuthorizerResult, APIGatewayProxyEvent, APIGatewayProxyEventQueryStringParameters, APIGatewayProxyResult } from 'aws-lambda';
 import { Subscription, AuthType, ServiceType, RegisterService, PostedPushNoticationData, NoticationData, NoticationUserPayload } from 'afp-apicore-sdk/dist/types';
+import { ApiCoreNotificationCenter } from 'afp-apicore-sdk/dist//apicore/notification';
 import webpush, { VapidKeys, PushSubscription, SendResult } from 'web-push';
-import { ALL_BROWSERS, AccessStorage, WebPushUserDocument, parseBoolean } from './databases';
+import { ALL_BROWSERS, AccessStorage, SubscriptionDocument, WebPushUserDocument, parseBoolean } from './databases';
 import { parse } from 'auth-header';
 import { base64decode } from 'nodejs-base64';
+import { v4 as uuid } from 'uuid';
 
 const AFPDECK_NOTIFICATIONCENTER_SERVICE = 'afpdeck-user-service';
 const AFPDECK_NOTIFICATIONCENTER_SHARED_SERVICE = 'afpdeck-shared-service';
@@ -116,6 +118,15 @@ function findAuthorization(req: APIGatewayRequestAuthorizerEvent): string | unde
     return undefined;
 }
 
+export interface AuthorizerOptions {
+    debug?: boolean;
+    apicoreBaseURL: string;
+    clientID: string;
+    clientSecret: string;
+    apicorePushUserName: string;
+    apicorePushPassword: string;
+}
+
 export class Authorizer {
     protected debug: boolean;
     protected apicoreBaseURL: string;
@@ -124,13 +135,13 @@ export class Authorizer {
     protected pushUserName: string;
     protected pushPassword: string;
 
-    constructor(options: { debug: boolean; apicoreBaseURL: string; clientID: string; clientSecret: string; pushUserName: string; pushPassword: string }) {
-        this.debug = options.debug;
+    constructor(options: AuthorizerOptions) {
+        this.debug = options.debug ?? false;
         this.apicoreBaseURL = options.apicoreBaseURL;
         this.clientID = options.clientID;
         this.clientSecret = options.clientSecret;
-        this.pushUserName = options.pushUserName;
-        this.pushPassword = options.pushPassword;
+        this.pushUserName = options.apicorePushUserName;
+        this.pushPassword = options.apicorePushPassword;
     }
 
     public async authorize(event: APIGatewayRequestAuthorizerEvent, context?: Context): Promise<APIGatewayAuthorizerResult> {
@@ -223,45 +234,33 @@ export class Authorizer {
     }
 }
 
+export interface AfpDeckNotificationCenterHandlerOptions extends AuthorizerOptions {
+    afpDeckPushURL: string;
+    serviceUserName?: string;
+    servicePassword?: string;
+    useSharedService?: boolean;
+    registerService?: boolean;
+}
 export class AfpDeckNotificationCenterHandler extends Authorizer {
     protected closed: boolean;
+    protected registerService: boolean;
     protected accessStorage: AccessStorage;
     protected afpDeckPushURL: string;
     protected useSharedService: boolean;
     protected serviceUserName: string;
     protected servicePassword: string;
 
-    constructor(
-        accessStorage: AccessStorage,
-        options: {
-            debug: boolean;
-            apicoreBaseURL: string;
-            clientID: string;
-            clientSecret: string;
-            afpDeckPushURL: string;
-            apicorePushUserName: string;
-            apicorePushPassword: string;
-            useSharedService: boolean;
-            serviceUserName: string;
-            servicePassword: string;
-        },
-    ) {
-        super({
-            debug: options.debug,
-            apicoreBaseURL: options.apicoreBaseURL,
-            clientID: options.clientID,
-            clientSecret: options.clientSecret,
-            pushPassword: options.apicorePushPassword,
-            pushUserName: options.apicorePushUserName,
-        });
+    constructor(accessStorage: AccessStorage, options: AfpDeckNotificationCenterHandlerOptions) {
+        super(options);
 
         this.accessStorage = accessStorage;
-        this.debug = options.debug;
+        this.debug = options.debug ?? false;
         this.afpDeckPushURL = options.afpDeckPushURL;
-        this.useSharedService = options.useSharedService;
         this.closed = false;
-        this.serviceUserName = options.serviceUserName;
-        this.servicePassword = options.servicePassword;
+        this.serviceUserName = options.serviceUserName ?? '';
+        this.servicePassword = options.servicePassword ?? '';
+        this.registerService = options.registerService ?? true;
+        this.useSharedService = options.useSharedService ?? false;
 
         process.on('SIGTERM', () => {
             this.close().finally(() => {
@@ -290,33 +289,35 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
     private async checkIfServiceIsRegistered(identity: Identify, serviceDefinition: ServiceDefinition) {
         const notificationCenter = this.getNotificationCenter(identity);
 
-        if (serviceDefinition.useSharedService) {
-            const services = await notificationCenter.listSharedServices(this.clientID, identity.principalId);
-            const service = services?.find((s) => s.serviceName === serviceDefinition.definition.name);
+        if (this.registerService) {
+            if (serviceDefinition.useSharedService) {
+                const services = await notificationCenter.listSharedServices(this.clientID, identity.principalId);
+                const service = services?.find((s) => s.serviceName === serviceDefinition.definition.name);
 
-            if (!service) {
-                try {
-                    const serviceName = await notificationCenter.registerSharedService(serviceDefinition.definition);
+                if (!service) {
+                    try {
+                        const serviceName = await notificationCenter.registerSharedService(serviceDefinition.definition);
+
+                        if (this.debug) {
+                            console.info(`Created shared service: ${serviceDefinition.definition.name}, uno: ${serviceName}`);
+                        }
+                    } catch (e) {
+                        console.info(`Shared service: ${serviceDefinition.definition.name}, already exists`);
+                    }
+                }
+            } else {
+                const services = await notificationCenter.listServices();
+                const service = services?.find((s) => s.serviceName === serviceDefinition.definition.name);
+
+                if (!service) {
+                    const serviceName = await notificationCenter.registerService(serviceDefinition.definition);
 
                     if (this.debug) {
-                        console.info(`Created shared service: ${serviceDefinition.definition.name}, uno: ${serviceName}`);
+                        console.info(`Created service: ${serviceDefinition.definition.name}, uno: ${serviceName}, for user: ${identity.principalId}`);
                     }
-                } catch (e) {
-                    console.info(`Shared service: ${serviceDefinition.definition.name}, already exists`);
+                } else if (this.debug) {
+                    console.info(`Created service: ${serviceDefinition.definition.name}, uno: ${service.serviceIdentifier}, for user: ${identity.principalId}`);
                 }
-            }
-        } else {
-            const services = await notificationCenter.listServices();
-            const service = services?.find((s) => s.serviceName === serviceDefinition.definition.name);
-
-            if (!service) {
-                const serviceName = await notificationCenter.registerService(serviceDefinition.definition);
-
-                if (this.debug) {
-                    console.info(`Created service: ${serviceDefinition.definition.name}, uno: ${serviceName}, for user: ${identity.principalId}`);
-                }
-            } else if (this.debug) {
-                console.info(`Created service: ${serviceDefinition.definition.name}, uno: ${service.serviceIdentifier}, for user: ${identity.principalId}`);
             }
         }
 
@@ -341,10 +342,18 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         };
     }
 
+    private async addSubscription(notificationCenter: ApiCoreNotificationCenter, identifier: string, notification: Subscription, serviceDefinition: ServiceDefinition) {
+        if (this.registerService) {
+            return await notificationCenter.addSubscription(identifier, serviceDefinition.definition.name, notification);
+        } else {
+            return uuid();
+        }
+    }
+
     private async registerNotification(identifier: string, notification: Subscription, identity: Identify, serviceDefinition: ServiceDefinition, browserID: string): Promise<APIGatewayProxyResult> {
         const now = new Date();
         const notificationCenter = await this.checkIfServiceIsRegistered(identity, serviceDefinition);
-        const notificationIdentifier = await notificationCenter.addSubscription(identifier, serviceDefinition.definition.name, notification);
+        const notificationIdentifier = await this.addSubscription(notificationCenter, identifier, notification, serviceDefinition);
 
         await this.accessStorage.storeSubscription({
             uno: notificationIdentifier,
@@ -501,9 +510,23 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         return OK;
     }
 
+    private async deleteSubscription(notificationCenter: ApiCoreNotificationCenter, identifier: string, identity: Identify) {
+        if (this.registerService) {
+            return await notificationCenter.deleteSubscription(identifier);
+        } else {
+            const subscriptions = await this.accessStorage.getSubscriptions(identity.principalId, identifier);
+
+            if (subscriptions.length > 0) {
+                return subscriptions[0];
+            }
+        }
+
+        return new HttpError('Not found', 404);
+    }
+
     private async deleteNotification(identifier: string, identity: Identify, serviceDefinition: ServiceDefinition, browserID: string): Promise<APIGatewayProxyResult> {
         const notificationCenter = this.getNotificationCenter(identity);
-        const notificationIdentifier = await notificationCenter.deleteSubscription(identifier);
+        const notificationIdentifier = await this.deleteSubscription(notificationCenter, identifier, identity);
 
         try {
             await this.accessStorage.deleteSubscription(identity.principalId, identifier, browserID);
