@@ -30,7 +30,6 @@
     "mongoose": "^8.0.1",
     "nodejs-base64": "^2.0.0",
     "npm": "^10.2.2",
-    "uuid": "^9.0.1",
     "web-push": "^3.6.6"
   },
   "devDependencies": {

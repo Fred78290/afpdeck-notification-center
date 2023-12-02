@@ -9,6 +9,7 @@ import { ALL_BROWSERS, AccessStorage, SubscriptionDocument, WebPushUserDocument,
 import { parse } from 'auth-header';
 import { base64decode } from 'nodejs-base64';
 import { v4 as uuid } from 'uuid';
+import { randomUUID } from 'crypto';
 
 const AFPDECK_NOTIFICATIONCENTER_SERVICE = 'afpdeck-user-service';
 const AFPDECK_NOTIFICATIONCENTER_SHARED_SERVICE = 'afpdeck-shared-service';
@@ -269,6 +270,10 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         });
     }
 
+    public get storage() {
+        return this.accessStorage;
+    }
+
     private getNotificationCenter(identity: Identify) {
         const apicore = new ApiCore({
             baseUrl: this.apicoreBaseURL,
@@ -346,7 +351,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         if (this.registerService) {
             return await notificationCenter.addSubscription(identifier, serviceDefinition.definition.name, notification);
         } else {
-            return uuid();
+            return randomUUID();
         }
     }
 
