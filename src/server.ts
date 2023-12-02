@@ -212,6 +212,7 @@ export interface AppOptions extends AfpDeckNotificationCenterHandlerOptions {
 export interface ServerApp {
 	handler: AfpDeckNotificationCenterHandler,
 	express: Express,
+	router: Router,
 }
 
 export async function createApp(options: AppOptions): Promise<ServerApp> {
@@ -252,7 +253,7 @@ export async function createApp(options: AppOptions): Promise<ServerApp> {
 					res.send("Hello, TypeScript Express!");
 				});
 
-				resolve({ handler: handler, express: app });
+				resolve({ handler: handler, express: app, router: router });
 			}).catch((e) => {
 				reject(e);
 			})
