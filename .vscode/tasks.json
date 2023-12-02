@@ -7,6 +7,13 @@
       "group": "build",
       "label": "tsc: build - tsconfig.json",
       "detail": "NODE_ENV=development tsc -p ."
+    },
+    {
+      "type": "shell",
+      "command": "cd mockup;npm run compile",
+      "group": "build",
+      "label": "tsc: build - mockup",
+      "detail": "NODE_ENV=development tsc -p ."
     }
   ]
 }
