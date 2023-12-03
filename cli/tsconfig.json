@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "module": "ESNext",
+    "target": "ESNext",
+    "strict": true,
+    "esModuleInterop": true,
+	"outDir": "dist",
+	"sourceMap": true,
+  },
+  "include": ["./src/**/*"],
+  "exclude": ["src/tests", "**/*.test.ts", "**/*.spec.ts", "**/jest.config.ts"]
+}
