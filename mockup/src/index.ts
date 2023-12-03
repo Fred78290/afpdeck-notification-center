@@ -265,23 +265,25 @@ async function mockupPush (
 
                 notications.push(notication)
             }
+        }
 
+        if (notications.length > 0) {
             sendPush(serverApp, notications).then((result) => {
                 console.log('Succesful push:', notications)
             }).catch((e) => {
                 console.error('Failed push:', e)
             })
-
-            response.status(200).json({
-                response: {
-                    notications: notications,
-                    status: {
-                        code: 0,
-                        message: 'OK'
-                    }
-                }
-            })
         }
+
+        response.status(200).json({
+            response: {
+                notications: notications,
+                status: {
+                    code: 0,
+                    message: 'OK'
+                }
+            }
+        })
     } else {
         response.status(406).json({
             error: {
