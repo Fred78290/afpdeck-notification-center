@@ -5,10 +5,9 @@ import { APIGatewayRequestAuthorizerEvent, Context, APIGatewayAuthorizerResult, 
 import { Subscription, AuthType, ServiceType, RegisterService, PostedPushNoticationData, NoticationData, NoticationUserPayload } from 'afp-apicore-sdk/dist/types';
 import { ApiCoreNotificationCenter } from 'afp-apicore-sdk/dist//apicore/notification';
 import webpush, { VapidKeys, PushSubscription, SendResult } from 'web-push';
-import { ALL_BROWSERS, AccessStorage, SubscriptionDocument, WebPushUserDocument, parseBoolean } from './databases';
+import { ALL, AccessStorage, UserPreferences, WebPushUserDocument, parseBoolean } from './databases';
 import { parse } from 'auth-header';
 import { base64decode } from 'nodejs-base64';
-import { v4 as uuid } from 'uuid';
 import { randomUUID } from 'crypto';
 
 const AFPDECK_NOTIFICATIONCENTER_SERVICE = 'afpdeck-user-service';
@@ -516,32 +515,22 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         return OK;
     }
 
-    private async deleteSubscription(notificationCenter: ApiCoreNotificationCenter, identifier: string, identity: Identify) {
-        if (this.registerService) {
-            return await notificationCenter.deleteSubscription(identifier);
-        } else {
-            const subscription = await this.accessStorage.getSubscription(identity.principalId, identifier);
-
-            if (subscription) {
-                return subscription;
-            }
-        }
-
-        return new HttpError('Not found', 404);
-    }
-
     private async deleteNotification(identifier: string, identity: Identify, serviceDefinition: ServiceDefinition, browserID: string): Promise<APIGatewayProxyResult> {
         const notificationCenter = this.getNotificationCenter(identity);
-        const notificationIdentifier = await this.deleteSubscription(notificationCenter, identifier, identity);
 
         try {
-            await this.accessStorage.deleteSubscription(identity.principalId, identifier, browserID);
+            const result = await this.accessStorage.deleteSubscription(identity.principalId, identifier, browserID);
+
+            // Delete subscription in apicore if all or any browser remains
+            if (this.registerService && (browserID === ALL || result.remains.length === 0)) {
+                await notificationCenter.deleteSubscription(identifier);
+            }
 
             return {
                 statusCode: 200,
                 body: JSON.stringify({
                     response: {
-                        uno: notificationIdentifier,
+                        name: identifier,
                         status: {
                             code: 0,
                             reason: 'OK',
@@ -661,14 +650,33 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
 
     private async getUserPreferences(principalId: string, name: string): Promise<APIGatewayProxyResult> {
         try {
-            const prefs = await this.accessStorage.getUserPreferences(principalId, name);
+            const found = await this.accessStorage.getUserPreferences(principalId, name);
+            let prefs: UserPreferences | UserPreferences[] | undefined = undefined;
 
-            if (prefs) {
+            if (found.length > 0) {
+                if (found.length > 1) {
+                    const alls: UserPreferences[] = [];
+
+                    prefs = alls;
+
+                    found.forEach((pref) => {
+                        alls.push({
+                            name: pref.name,
+                            preferences: pref.preferences,
+                        });
+                    });
+                } else {
+                    prefs = {
+                        name: found[0].name,
+                        preferences: found[0].preferences,
+                    };
+                }
+
                 return {
                     statusCode: 200,
                     body: JSON.stringify({
                         response: {
-                            preferences: prefs.preferences,
+                            preferences: prefs,
                             status: {
                                 status: 0,
                                 message: 'OK',
@@ -726,7 +734,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                     }
                 } else {
                     const serviceIdentifier = this.getServiceDefinition(event.queryStringParameters);
-                    const browserID = event.queryStringParameters?.browserID ?? ALL_BROWSERS;
+                    const browserID = event.queryStringParameters?.browserID ?? ALL;
                     const identity = {
                         principalId: authorizer?.principalId,
                         accessToken: authorizer?.accessToken,

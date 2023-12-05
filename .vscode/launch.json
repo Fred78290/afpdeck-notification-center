@@ -27,6 +27,17 @@
 		"outFiles": ["${workspaceFolder}/mockup/build/**/*.js"]
 	  },
 	  {
+		"type": "node",
+		"request": "launch",
+		"name": "Cli",
+		"localRoot": "${workspaceFolder}/cli",
+		"cwd": "${workspaceFolder}/cli",
+		"skipFiles": ["<node_internals>/**"],
+		"program": "${workspaceFolder}/cli/src/index.js",
+		"preLaunchTask": "tsc: build - mockup",
+		"outFiles": ["${workspaceFolder}/cli/build/**/*.js"]
+	  },
+	  {
       "name": "Debug Jest Tests",
       "type": "node",
       "request": "launch",

@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import mongoose, { ConnectOptions } from 'mongoose';
 import url from 'url';
-import { ALL_BROWSERS, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument } from '../index';
+import { ALL, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument, DeletedSubscriptionRemainder } from '../index';
+import e from 'cors';
 
 const UserPreferencesSchema = new mongoose.Schema<UserPreferencesDocument>({
     name: { type: String, required: true, index: true },
@@ -155,23 +156,25 @@ export class MongoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public getUserPreferences(principalId: string, name: string): Promise<UserPreferencesDocument> {
-        return new Promise<UserPreferencesDocument>((resolve, reject) => {
+    public getUserPreferences(principalId: string, name: string): Promise<UserPreferencesDocument[]> {
+        return new Promise<UserPreferencesDocument[]>((resolve, reject) => {
             if (this.userPreferencesModel) {
                 this.userPreferencesModel
-                    .findOne({
-                        owner: principalId,
-                        name: name,
-                    })
+                    .find(
+                        name === ALL
+                            ? {
+                                  owner: principalId,
+                              }
+                            : {
+                                  owner: principalId,
+                                  name: name,
+                              },
+                    )
                     .exec()
-                    .then((result) => {
-                        if (result) {
-                            resolve(result);
-                        } else {
-                            reject(new Error('Not found'));
-                        }
+                    .then((results) => {
+                        resolve(results);
                     })
-                    .catch((e: any) => {
+                    .catch((e) => {
                         reject(e);
                     });
             } else {
@@ -184,13 +187,19 @@ export class MongoDBAccessStorage implements AccessStorage {
         return new Promise<void>((resolve, reject) => {
             if (this.userPreferencesModel) {
                 this.userPreferencesModel
-                    .findOneAndDelete({
-                        owner: principalId,
-                        name: name,
-                    })
+                    .deleteMany(
+                        name === ALL
+                            ? {
+                                  owner: principalId,
+                              }
+                            : {
+                                  owner: principalId,
+                                  name: name,
+                              },
+                    )
                     .exec()
                     .then((result) => {
-                        if (result) {
+                        if (result.acknowledged) {
                             resolve();
                         } else {
                             reject(new Error('Not found'));
@@ -209,7 +218,7 @@ export class MongoDBAccessStorage implements AccessStorage {
         return new Promise<WebPushUserDocument[]>((resolve, reject) => {
             if (this.webPushUserModel) {
                 const filter =
-                    browserID === ALL_BROWSERS
+                    browserID === ALL
                         ? {
                               owner: principalId,
                           }
@@ -286,7 +295,7 @@ export class MongoDBAccessStorage implements AccessStorage {
         return new Promise<void>((resolve, reject) => {
             if (this.webPushUserModel) {
                 const filter =
-                    browserID === ALL_BROWSERS
+                    browserID === ALL
                         ? {
                               owner: principalId,
                           }
@@ -369,18 +378,46 @@ export class MongoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public deleteSubscription(owner: string, name: string, browserID: string): Promise<void> {
-        return new Promise<void>((resolve, reject) => {
+    public deleteSubscription(owner: string, name: string, browserID: string): Promise<DeletedSubscriptionRemainder> {
+        return new Promise<DeletedSubscriptionRemainder>((resolve, reject) => {
             if (this.subscriptionModel) {
+                const filter =
+                    browserID === ALL
+                        ? {
+                              owner: owner,
+                              name: name,
+                          }
+                        : {
+                              owner: owner,
+                              name: name,
+                              browserID: browserID,
+                          };
+
                 this.subscriptionModel
-                    .findOneAndDelete({
-                        owner: owner,
-                        name: name,
-                        browserID: browserID,
-                    })
+                    .deleteMany(filter)
                     .exec()
-                    .then(() => {
-                        resolve();
+                    .then((result) => {
+                        const remains: DeletedSubscriptionRemainder = {
+                            identifier: name,
+                            remains: [],
+                        };
+
+                        if (browserID !== ALL) {
+                            this.subscriptionModel
+                                ?.find({
+                                    owner: owner,
+                                    name: name,
+                                })
+                                .then((results) => {
+                                    remains.remains.concat(results.map((item) => item.browserID));
+                                    resolve(remains);
+                                })
+                                .catch((e) => {
+                                    reject(e);
+                                });
+                        } else {
+                            resolve(remains);
+                        }
                     })
                     .catch((e: any) => {
                         reject(e);

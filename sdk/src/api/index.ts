@@ -1,6 +1,7 @@
 import ApiCore from 'afp-apicore-sdk'
 import { Subscription, RegisteredSubscription, ClientCredentials, Token } from 'afp-apicore-sdk/dist/types'
 import { WebPushUser, ServiceDefinition } from '../../../lambda/app'
+import { UserPreferences } from '../../../lambda/databases'
 import { RequestParams, get, del, post, put } from '../utils/request'
 import fingerprint from '@fingerprintjs/fingerprintjs'
 
@@ -15,7 +16,7 @@ interface CommonResponse {
 
 interface UserPreferencesResponse {
     response: {
-        preferences: any
+        preferences: UserPreferences | UserPreferences[] | undefined
         status: {
             code: number
             reason: string

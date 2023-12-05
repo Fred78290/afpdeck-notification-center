@@ -2,11 +2,8 @@
 	"name": "@fred78290/afpdeck-cli",
 	"version": "1.0.0",
 	"description": "Command to call afpdeck-notification-center service",
-	"main": "dist/afpdeck-notification-center.js",
-	"browser": "dist/afpdeck-notification-center.umd.js",
-	"module": "dist/afpdeck-notification-center.es.js",
-	"source": "src/afpdeck-notification-center.ts",
-	"types": "dist/afpdeck-notification-center.d.ts",
+	"main": "dist/index.js",
+	"type": "module",
 	"bin": {
 		"afpdeck-cli": "dist/index.js"
 	},
@@ -14,8 +11,7 @@
 		"clean": "rm -rf dist .rts2_cache_*",
 		"build": "tsc",
 		"lint": "eslint 'src/**/*.ts'",
-		"prepare": "npm run clean && npm run lint && npm run build",
-		"test": "jest --coverage --testTimeout=10000 --runInBand --detectOpenHandles"
+		"prepare": "npm run clean && npm run lint && npm run build"
 	},
 	"repository": {
 		"type": "git",
@@ -66,11 +62,8 @@
 		"typescript": "^5.3.2"
 	},
 	"dependencies": {
-		"@fingerprintjs/fingerprintjs": "^4.2.1",
-		"afp-apicore-sdk": "^1.1.10",
-		"cross-fetch": "^4.0.0",
-		"minimist": "^1.2.8",
-		"statuses": "^2.0.1"
+		"@fred78290/afpdeck-notification-center": "file://../sdk",
+		"minimist": "^1.2.8"
 	},
 	"lib": [
 		"esnext"

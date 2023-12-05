@@ -4,13 +4,18 @@ import { VapidKeys, PushSubscription } from 'web-push';
 import { DynamoDBAccessStorage } from './src/dynamodb';
 import { MongoDBAccessStorage } from './src/mongo';
 
-export const ALL_BROWSERS = 'all';
+export const ALL = 'all';
 
 const DEFAULT_WEBPUSH_TABLENAME = 'afpdeck-webpush';
 const DEFAULT_SUBSCRIPTIONS_TABLENAME = 'afpdeck-subscriptions';
 const DEFAULT_USERPREFS_TABLENAME = 'afpdeck-preferences';
 
-export interface UserPreferencesDocument {
+export interface UserPreferences {
+    name: string;
+    preferences: unknown;
+}
+
+export interface UserPreferencesDocument extends UserPreferences {
     owner: string;
     name: string;
     preferences: unknown;
@@ -21,10 +26,17 @@ export interface SubscriptionDocument {
     owner: string;
     name: string;
     uno: string;
-    browserID: string;
     subscription: Subscription;
     created: Date;
     updated: Date;
+}
+
+export interface RegisterSubscriptionDocument extends SubscriptionDocument {
+    browserID: string;
+}
+
+export interface RegisteredSubscriptionDocument extends SubscriptionDocument {
+    browserID: string[];
 }
 
 export interface WebPushUserDocument {
@@ -36,12 +48,17 @@ export interface WebPushUserDocument {
     updated: Date;
 }
 
+export interface DeletedSubscriptionRemainder {
+    identifier: string;
+    remains: string[];
+}
+
 export interface AccessStorage {
     connect(): Promise<AccessStorage>;
     disconnect(): Promise<void>;
 
     storeUserPreferences(document: UserPreferencesDocument): Promise<void>;
-    getUserPreferences(principalId: string, name: string): Promise<UserPreferencesDocument>;
+    getUserPreferences(principalId: string, name: string): Promise<UserPreferencesDocument[]>;
     deleteUserPreferences(principalId: string, name: string): Promise<void>;
 
     findPushKeyForIdentity(principalId: string, browserID: string): Promise<WebPushUserDocument[]>;
@@ -49,10 +66,10 @@ export interface AccessStorage {
     updateWebPushUserDocument(document: WebPushUserDocument): Promise<void>;
     deleteWebPushUserDocument(principalId: string, browserID: string): Promise<void>;
 
-    getSubscriptions(owner: string): Promise<SubscriptionDocument[]>;
-    getSubscription(owner: string, name: string): Promise<SubscriptionDocument | null>;
-    storeSubscription(subscription: SubscriptionDocument): Promise<void>;
-    deleteSubscription(owner: string, name: string, browserID: string): Promise<void>;
+    getSubscriptions(owner: string): Promise<RegisteredSubscriptionDocument[]>;
+    getSubscription(owner: string, name: string): Promise<RegisteredSubscriptionDocument | null>;
+    storeSubscription(subscription: RegisterSubscriptionDocument): Promise<void>;
+    deleteSubscription(owner: string, name: string, browserID: string): Promise<DeletedSubscriptionRemainder>;
 }
 
 export default async function database(
