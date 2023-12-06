@@ -8,6 +8,7 @@ export const ALL = 'all';
 
 const DEFAULT_WEBPUSH_TABLENAME = 'afpdeck-webpush';
 const DEFAULT_SUBSCRIPTIONS_TABLENAME = 'afpdeck-subscriptions';
+const DEFAULT_BROWSERID_TABLENAME = 'afpdeck-browserid';
 const DEFAULT_USERPREFS_TABLENAME = 'afpdeck-preferences';
 
 export interface UserPreferences {
@@ -50,7 +51,7 @@ export interface WebPushUserDocument {
 
 export interface DeletedSubscriptionRemainder {
     identifier: string;
-    remains: string[];
+    remains?: string[];
 }
 
 export interface AccessStorage {
@@ -78,6 +79,7 @@ export default async function database(
     userPreferencesTableName?: string,
     webPushUserTableName?: string,
     subscriptionTableName?: string,
+    subscriptionByBrowserName?: string,
 ): Promise<AccessStorage> {
     let db: AccessStorage;
 
@@ -97,6 +99,7 @@ export default async function database(
             userPreferencesTableName ?? DEFAULT_USERPREFS_TABLENAME,
             webPushUserTableName ?? DEFAULT_WEBPUSH_TABLENAME,
             subscriptionTableName ?? DEFAULT_SUBSCRIPTIONS_TABLENAME,
+            subscriptionByBrowserName ?? DEFAULT_BROWSERID_TABLENAME,
         );
     }
 

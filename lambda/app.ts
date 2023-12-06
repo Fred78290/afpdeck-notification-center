@@ -383,54 +383,6 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         };
     }
 
-    private sendNotificationToClientSync(notication: NoticationData, subscription: NoticationUserPayload): Promise<Promise<SendResult>[]> {
-        return new Promise((resolve, reject) => {
-            this.accessStorage.getSubscription(subscription.userID, subscription.name).then((subItem) => {
-                const result: Promise<SendResult>[] = [];
-
-                if (subItem != null) {
-                    const userPushKeys: Promise<WebPushUserDocument[]>[] = [];
-
-                    userPushKeys.push(this.accessStorage.findPushKeyForIdentity(subscription.userID, subItem.browserID));
-
-                    Promise.allSettled(userPushKeys).then((settlements) => {
-                        settlements.forEach((settlement) => {
-                            if (settlement.status === 'fulfilled') {
-                                const userPushKey = settlement.value;
-
-                                if (userPushKey.length > 0) {
-                                    const datas = {
-                                        name: subscription.name,
-                                        uno: subscription.identifier,
-                                        isFree: subscription.isFree,
-                                        documentUrl: subscription.documentUrl,
-                                        thumbnailUrl: subscription.thumbnailUrl,
-                                        payload: notication,
-                                    };
-
-                                    userPushKey.forEach((m) => {
-                                        const push = webpush.sendNotification(m.subscription, JSON.stringify(datas), {
-                                            vapidDetails: {
-                                                subject: m.browserID,
-                                                ...m.apiKeys,
-                                            },
-                                        });
-
-                                        result.push(push);
-                                    });
-                                }
-                            } else {
-                                console.error(settlement.reason);
-                            }
-                        });
-                    });
-                }
-
-                resolve(result);
-            });
-        });
-    }
-
     private async sendNotificationToClient(notication: NoticationData, subscription: NoticationUserPayload): Promise<Promise<SendResult>[]> {
         const result: Promise<SendResult>[] = [];
         const subItem = await this.accessStorage.getSubscription(subscription.userID, subscription.name);
@@ -522,7 +474,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
             const result = await this.accessStorage.deleteSubscription(identity.principalId, identifier, browserID);
 
             // Delete subscription in apicore if all or any browser remains
-            if (this.registerService && (browserID === ALL || result.remains.length === 0)) {
+            if (this.registerService && (browserID === ALL || result.remains?.length === 0)) {
                 await notificationCenter.deleteSubscription(identifier);
             }
 

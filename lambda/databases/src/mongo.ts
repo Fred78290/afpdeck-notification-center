@@ -1,8 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import mongoose, { ConnectOptions } from 'mongoose';
 import url from 'url';
-import { ALL, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument, DeletedSubscriptionRemainder } from '../index';
-import e from 'cors';
+import { ALL, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument, RegisteredSubscriptionDocument, DeletedSubscriptionRemainder } from '../index';
+
+interface SubscriptionByBrowser {
+    name: string;
+    owner: string;
+    browserID: string;
+}
 
 const UserPreferencesSchema = new mongoose.Schema<UserPreferencesDocument>({
     name: { type: String, required: true, index: true },
@@ -11,10 +16,15 @@ const UserPreferencesSchema = new mongoose.Schema<UserPreferencesDocument>({
     preferences: { type: mongoose.Schema.Types.Mixed, required: true },
 });
 
-const SubscriptionSchema = new mongoose.Schema<SubscriptionDocument>({
+const SubscriptionByBrowserSchema = new mongoose.Schema<SubscriptionByBrowser>({
     name: { type: String, required: true, index: true },
     owner: { type: String, required: true, index: true },
     browserID: { type: String, required: true, index: true },
+});
+
+const SubscriptionSchema = new mongoose.Schema<SubscriptionDocument>({
+    name: { type: String, required: true, index: true },
+    owner: { type: String, required: true, index: true },
     uno: { type: String, required: true },
     updated: { type: Date, required: true },
     created: { type: Date, required: true },
@@ -66,15 +76,18 @@ export class MongoDBAccessStorage implements AccessStorage {
     private userPreferencesCollection: string;
     private webPushUserCollection: string;
     private subscriptionCollection: string;
+    private subscriptionByBrowserCollection: string;
     private webPushUserModel: mongoose.Model<WebPushUserDocument> | undefined;
     private subscriptionModel: mongoose.Model<SubscriptionDocument> | undefined;
     private userPreferencesModel: mongoose.Model<UserPreferencesDocument> | undefined;
+    private subscriptionByBrowserModel: mongoose.Model<SubscriptionByBrowser> | undefined;
 
-    constructor(mongoURL: string, userPreferencesCollection: string, webPushUserCollection: string, subscriptionCollection: string) {
+    constructor(mongoURL: string, userPreferencesCollection: string, webPushUserCollection: string, subscriptionCollection: string, subscriptionByBrowserCollection: string) {
         this.mongoURL = mongoURL;
         this.userPreferencesCollection = userPreferencesCollection;
         this.webPushUserCollection = webPushUserCollection;
         this.subscriptionCollection = subscriptionCollection;
+        this.subscriptionByBrowserCollection = subscriptionByBrowserCollection;
     }
 
     disconnect(): Promise<void> {
@@ -109,6 +122,7 @@ export class MongoDBAccessStorage implements AccessStorage {
                     this.webPushUserModel = m.model<WebPushUserDocument>('WebPushUser', WebPushUserSchema, this.webPushUserCollection);
                     this.userPreferencesModel = m.model<UserPreferencesDocument>('UserPreferences', UserPreferencesSchema, this.userPreferencesCollection);
                     this.subscriptionModel = m.model<SubscriptionDocument>('Subscription', SubscriptionSchema, this.subscriptionCollection);
+                    this.subscriptionByBrowserModel = m.model<SubscriptionByBrowser>('BrowserSubscription', SubscriptionByBrowserSchema, this.subscriptionCollection);
                     resolve(this);
                 })
                 .catch((e) => {
@@ -319,8 +333,8 @@ export class MongoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public getSubscriptions(owner: string): Promise<SubscriptionDocument[]> {
-        return new Promise<SubscriptionDocument[]>((resolve, reject) => {
+    public getSubscriptions(owner: string): Promise<RegisteredSubscriptionDocument[]> {
+        return new Promise<RegisteredSubscriptionDocument[]>((resolve, reject) => {
             if (this.subscriptionModel) {
                 this.subscriptionModel
                     .find({
@@ -339,8 +353,8 @@ export class MongoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public getSubscription(owner: string, name: string): Promise<SubscriptionDocument | null> {
-        return new Promise<SubscriptionDocument | null>((resolve, reject) => {
+    public getSubscription(owner: string, name: string): Promise<RegisteredSubscriptionDocument | null> {
+        return new Promise<RegisteredSubscriptionDocument | null>((resolve, reject) => {
             if (this.subscriptionModel) {
                 this.subscriptionModel
                     .findOne({

@@ -49,14 +49,14 @@ const webPushUserTable = defineTable(
 const subscriptionByBrowserTable = defineTable(
     {
         owner: 'string',
-        browserID: 'string',
         name: 'string',
+        browserID: 'string',
     },
     'name',
-    'browserID',
+    'owner',
     {
-        owner: {
-            partitionKey: 'owner',
+        browserID: {
+            partitionKey: 'browserID',
             sortKey: 'name',
         },
     },
@@ -524,10 +524,11 @@ export class DynamoDBAccessStorage implements AccessStorage {
                         })
                         .then((result) => {
                             this.subscriptionByBrowserTableClient
-                                .query(
+                                .index('browserID')
+                                .queryAll(
                                     {
-                                        browserID: (sortKey) => sortKey.eq(subscription.browserID),
-                                        name: subscription.name,
+                                        browserID: subscription.browserID,
+                                        name: (sortKey) => sortKey.eq(subscription.name),
                                     },
                                     {
                                         filter: (compare) => compare().owner.eq(subscription.owner),
@@ -599,29 +600,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
 
     public deleteSubscription(owner: string, name: string, browserID: string): Promise<DeletedSubscriptionRemainder> {
         return new Promise<DeletedSubscriptionRemainder>((resolve, reject) => {
-            if (browserID === ALL) {
-                // TODO
-            } else {
-                this.subscriptionByBrowserTableClient
-                    .delete(
-                        {
-                            browserID: browserID,
-                            name: name,
-                        },
-                        {
-                            condition: browserID === ALL ? undefined : (condition) => condition().owner.eq(owner),
-                            returnValues: 'ALL_OLD',
-                        },
-                    )
-                    .then((result) => {
-                        // TODO
-                    })
-                    .catch((e) => {
-                        reject(e);
-                    });
-            }
-
-            this.subscriptionTableClient
+            this.subscriptionByBrowserTableClient
                 .delete(
                     {
                         owner: owner,
@@ -633,33 +612,40 @@ export class DynamoDBAccessStorage implements AccessStorage {
                     },
                 )
                 .then((result) => {
-                    if (result.item) {
-                        const remains: DeletedSubscriptionRemainder = {
+                    if (browserID === ALL) {
+                        resolve({
                             identifier: name,
-                            remains: [],
-                        };
-
-                        if (browserID !== ALL) {
-                            resolve(remains);
-                        } else {
-                            this.subscriptionTableClient
-                                .queryAll({
-                                    owner: owner,
-                                    name: (sort) => sort.eq(name),
-                                })
-                                .then((values) => {
-                                    values.member.forEach((item) => {
-                                        remains.remains?.push(item.browserID);
-                                    });
-
-                                    resolve(remains);
-                                })
-                                .catch((e) => {
-                                    reject(e);
-                                });
-                        }
+                        });
                     } else {
-                        reject(new Error('Not found'));
+                        this.subscriptionByBrowserTableClient
+                            .queryAll({
+                                name: name,
+                                owner: (sortKey) => sortKey.eq(owner),
+                            })
+                            .then((results) => {
+                                const remains = results.member.map((item) => item.browserID);
+
+                                if (remains.length > 0) {
+                                    resolve({
+                                        identifier: name,
+                                        remains: remains,
+                                    });
+                                } else {
+                                    this.subscriptionTableClient
+                                        .delete({
+                                            owner: owner,
+                                            name: name,
+                                        })
+                                        .then(() => {
+                                            resolve({
+                                                identifier: name,
+                                            });
+                                        })
+                                        .catch((e) => {
+                                            reject(e);
+                                        });
+                                }
+                            });
                     }
                 })
                 .catch((e) => {
