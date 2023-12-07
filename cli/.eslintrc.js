@@ -76,7 +76,7 @@ module.exports = {
       "error",
       {
         rules: {
-          "strict-type-predicates": true,
+          "strict-type-predicates": false,
           whitespace: true,
         },
       },

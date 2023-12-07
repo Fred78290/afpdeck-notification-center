@@ -27,17 +27,10 @@ export interface SubscriptionDocument {
     owner: string;
     name: string;
     uno: string;
+    browserID: string[];
     subscription: Subscription;
     created: Date;
     updated: Date;
-}
-
-export interface RegisterSubscriptionDocument extends SubscriptionDocument {
-    browserID: string;
-}
-
-export interface RegisteredSubscriptionDocument extends SubscriptionDocument {
-    browserID: string[];
 }
 
 export interface WebPushUserDocument {
@@ -62,14 +55,14 @@ export interface AccessStorage {
     getUserPreferences(principalId: string, name: string): Promise<UserPreferencesDocument[]>;
     deleteUserPreferences(principalId: string, name: string): Promise<void>;
 
-    findPushKeyForIdentity(principalId: string, browserID: string): Promise<WebPushUserDocument[]>;
+    findPushKeyForIdentity(principalId: string, browserID: string[]): Promise<WebPushUserDocument[]>;
     storeWebPushUserDocument(document: WebPushUserDocument): Promise<void>;
     updateWebPushUserDocument(document: WebPushUserDocument): Promise<void>;
     deleteWebPushUserDocument(principalId: string, browserID: string): Promise<void>;
 
-    getSubscriptions(owner: string): Promise<RegisteredSubscriptionDocument[]>;
-    getSubscription(owner: string, name: string): Promise<RegisteredSubscriptionDocument | null>;
-    storeSubscription(subscription: RegisterSubscriptionDocument): Promise<void>;
+    getSubscriptions(owner: string): Promise<SubscriptionDocument[]>;
+    getSubscription(owner: string, name: string): Promise<SubscriptionDocument | null>;
+    storeSubscription(subscription: SubscriptionDocument): Promise<void>;
     deleteSubscription(owner: string, name: string, browserID: string): Promise<DeletedSubscriptionRemainder>;
 }
 
@@ -99,7 +92,6 @@ export default async function database(
             userPreferencesTableName ?? DEFAULT_USERPREFS_TABLENAME,
             webPushUserTableName ?? DEFAULT_WEBPUSH_TABLENAME,
             subscriptionTableName ?? DEFAULT_SUBSCRIPTIONS_TABLENAME,
-            subscriptionByBrowserName ?? DEFAULT_BROWSERID_TABLENAME,
         );
     }
 

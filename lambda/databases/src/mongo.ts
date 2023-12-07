@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import mongoose, { ConnectOptions } from 'mongoose';
 import url from 'url';
-import { ALL, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument, RegisteredSubscriptionDocument, DeletedSubscriptionRemainder } from '../index';
+import { ALL, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument, DeletedSubscriptionRemainder } from '../index';
 
 interface SubscriptionByBrowser {
     name: string;
@@ -16,16 +16,11 @@ const UserPreferencesSchema = new mongoose.Schema<UserPreferencesDocument>({
     preferences: { type: mongoose.Schema.Types.Mixed, required: true },
 });
 
-const SubscriptionByBrowserSchema = new mongoose.Schema<SubscriptionByBrowser>({
-    name: { type: String, required: true, index: true },
-    owner: { type: String, required: true, index: true },
-    browserID: { type: String, required: true, index: true },
-});
-
 const SubscriptionSchema = new mongoose.Schema<SubscriptionDocument>({
     name: { type: String, required: true, index: true },
     owner: { type: String, required: true, index: true },
     uno: { type: String, required: true },
+    browserID: { type: [String], required: true },
     updated: { type: Date, required: true },
     created: { type: Date, required: true },
     subscription: {
@@ -76,18 +71,15 @@ export class MongoDBAccessStorage implements AccessStorage {
     private userPreferencesCollection: string;
     private webPushUserCollection: string;
     private subscriptionCollection: string;
-    private subscriptionByBrowserCollection: string;
     private webPushUserModel: mongoose.Model<WebPushUserDocument> | undefined;
     private subscriptionModel: mongoose.Model<SubscriptionDocument> | undefined;
     private userPreferencesModel: mongoose.Model<UserPreferencesDocument> | undefined;
-    private subscriptionByBrowserModel: mongoose.Model<SubscriptionByBrowser> | undefined;
 
-    constructor(mongoURL: string, userPreferencesCollection: string, webPushUserCollection: string, subscriptionCollection: string, subscriptionByBrowserCollection: string) {
+    constructor(mongoURL: string, userPreferencesCollection: string, webPushUserCollection: string, subscriptionCollection: string) {
         this.mongoURL = mongoURL;
         this.userPreferencesCollection = userPreferencesCollection;
         this.webPushUserCollection = webPushUserCollection;
         this.subscriptionCollection = subscriptionCollection;
-        this.subscriptionByBrowserCollection = subscriptionByBrowserCollection;
     }
 
     disconnect(): Promise<void> {
@@ -122,7 +114,6 @@ export class MongoDBAccessStorage implements AccessStorage {
                     this.webPushUserModel = m.model<WebPushUserDocument>('WebPushUser', WebPushUserSchema, this.webPushUserCollection);
                     this.userPreferencesModel = m.model<UserPreferencesDocument>('UserPreferences', UserPreferencesSchema, this.userPreferencesCollection);
                     this.subscriptionModel = m.model<SubscriptionDocument>('Subscription', SubscriptionSchema, this.subscriptionCollection);
-                    this.subscriptionByBrowserModel = m.model<SubscriptionByBrowser>('BrowserSubscription', SubscriptionByBrowserSchema, this.subscriptionCollection);
                     resolve(this);
                 })
                 .catch((e) => {
@@ -228,18 +219,17 @@ export class MongoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public findPushKeyForIdentity(principalId: string, browserID: string): Promise<WebPushUserDocument[]> {
+    public findPushKeyForIdentity(principalId: string, browserID: string[]): Promise<WebPushUserDocument[]> {
         return new Promise<WebPushUserDocument[]>((resolve, reject) => {
             if (this.webPushUserModel) {
-                const filter =
-                    browserID === ALL
-                        ? {
-                              owner: principalId,
-                          }
-                        : {
-                              owner: principalId,
-                              browserID: browserID,
-                          };
+                const filter = browserID.includes(ALL)
+                    ? {
+                          owner: principalId,
+                      }
+                    : {
+                          owner: principalId,
+                          browserID: browserID,
+                      };
 
                 this.webPushUserModel
                     .find(filter)
@@ -308,18 +298,17 @@ export class MongoDBAccessStorage implements AccessStorage {
     public deleteWebPushUserDocument(principalId: string, browserID: string): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             if (this.webPushUserModel) {
-                const filter =
-                    browserID === ALL
-                        ? {
-                              owner: principalId,
-                          }
-                        : {
-                              owner: principalId,
-                              browserID: browserID,
-                          };
-
                 this.webPushUserModel
-                    .deleteMany(filter)
+                    .deleteMany(
+                        browserID === ALL
+                            ? {
+                                  owner: principalId,
+                              }
+                            : {
+                                  owner: principalId,
+                                  browserID: browserID,
+                              },
+                    )
                     .exec()
                     .then((results) => {
                         resolve();
@@ -333,8 +322,8 @@ export class MongoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public getSubscriptions(owner: string): Promise<RegisteredSubscriptionDocument[]> {
-        return new Promise<RegisteredSubscriptionDocument[]>((resolve, reject) => {
+    public getSubscriptions(owner: string): Promise<SubscriptionDocument[]> {
+        return new Promise<SubscriptionDocument[]>((resolve, reject) => {
             if (this.subscriptionModel) {
                 this.subscriptionModel
                     .find({
@@ -353,8 +342,8 @@ export class MongoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public getSubscription(owner: string, name: string): Promise<RegisteredSubscriptionDocument | null> {
-        return new Promise<RegisteredSubscriptionDocument | null>((resolve, reject) => {
+    public getSubscription(owner: string, name: string): Promise<SubscriptionDocument | null> {
+        return new Promise<SubscriptionDocument | null>((resolve, reject) => {
             if (this.subscriptionModel) {
                 this.subscriptionModel
                     .findOne({
@@ -363,7 +352,11 @@ export class MongoDBAccessStorage implements AccessStorage {
                     })
                     .exec()
                     .then((results) => {
-                        resolve(results);
+                        if (results) {
+                            resolve(results);
+                        } else {
+                            reject(new Error('Requested resource not found'));
+                        }
                     })
                     .catch((e) => {
                         reject(e);
@@ -377,13 +370,38 @@ export class MongoDBAccessStorage implements AccessStorage {
     public storeSubscription(subscription: SubscriptionDocument): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             if (this.subscriptionModel) {
-                const doc = new this.subscriptionModel(subscription);
-
-                doc.save()
-                    .then(() => {
-                        resolve();
+                this.subscriptionModel
+                    .findOne({
+                        owner: subscription.owner,
+                        name: subscription.name,
                     })
-                    .catch((e: any) => {
+                    .exec()
+                    .then((item) => {
+                        if (this.subscriptionModel) {
+                            if (item) {
+                                const browserIDs = item.browserID;
+
+                                browserIDs.forEach((id) => {
+                                    if (!subscription.browserID.includes(id)) {
+                                        subscription.browserID.push(id);
+                                    }
+                                });
+                            }
+
+                            const doc = new this.subscriptionModel(subscription);
+
+                            doc.isNew = item === null || item === undefined;
+
+                            doc.save()
+                                .then(() => {
+                                    resolve();
+                                })
+                                .catch((e: any) => {
+                                    reject(e);
+                                });
+                        }
+                    })
+                    .catch((e) => {
                         reject(e);
                     });
             } else {
@@ -395,43 +413,52 @@ export class MongoDBAccessStorage implements AccessStorage {
     public deleteSubscription(owner: string, name: string, browserID: string): Promise<DeletedSubscriptionRemainder> {
         return new Promise<DeletedSubscriptionRemainder>((resolve, reject) => {
             if (this.subscriptionModel) {
-                const filter =
-                    browserID === ALL
-                        ? {
-                              owner: owner,
-                              name: name,
-                          }
-                        : {
-                              owner: owner,
-                              name: name,
-                              browserID: browserID,
-                          };
-
                 this.subscriptionModel
-                    .deleteMany(filter)
+                    .findOne({
+                        owner: owner,
+                        name: name,
+                    })
                     .exec()
-                    .then((result) => {
+                    .then((found) => {
                         const remains: DeletedSubscriptionRemainder = {
                             identifier: name,
-                            remains: [],
                         };
 
-                        if (browserID !== ALL) {
-                            this.subscriptionModel
-                                ?.find({
-                                    owner: owner,
-                                    name: name,
-                                })
-                                .then((results) => {
-                                    remains.remains.concat(results.map((item) => item.browserID));
-                                    resolve(remains);
-                                })
-                                .catch((e) => {
-                                    reject(e);
-                                });
-                        } else {
-                            resolve(remains);
+                        if (found && this.subscriptionModel) {
+                            found.browserID = found.browserID.filter((value) => value !== browserID);
+
+                            if (found.browserID.length > 0) {
+                                const doc = new this.subscriptionModel(found);
+
+                                doc.updateOne()
+                                    .then(() => {
+                                        resolve({
+                                            identifier: name,
+                                            remains: found.browserID,
+                                        });
+                                    })
+                                    .catch((e: any) => {
+                                        reject(e);
+                                    });
+                            } else {
+                                this.subscriptionModel
+                                    ?.deleteOne({
+                                        owner: owner,
+                                        name: name,
+                                    })
+                                    .exec()
+                                    .then(() => {
+                                        resolve({
+                                            identifier: name,
+                                        });
+                                    })
+                                    .catch((e) => {
+                                        reject(e);
+                                    });
+                            }
                         }
+
+                        resolve(remains);
                     })
                     .catch((e: any) => {
                         reject(e);

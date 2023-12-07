@@ -125,7 +125,24 @@ function createDynamoDBTables() {
 			AttributeDefinitions: [
 				{ AttributeName: 'owner', AttributeType: 'S' },
 				{ AttributeName: 'name', AttributeType: 'S' },
+				{ AttributeName: 'uno', AttributeType: 'S' },
+				{ AttributeName: 'created', AttributeType: 'N' },
 			],
+			GlobalSecondaryIndexes: [
+				{
+					IndexName: 'uno-index',
+					Projection: {
+						NonKeyAttributes: [
+							'owner',
+							'name',
+						],
+					},
+					KeySchema: [
+						{ AttributeName: 'uno', KeyType: 'HASH' },
+						{ AttributeName: 'created', KeyType: 'RANGE' },
+					]
+				},
+			]
 		},
 	];
 

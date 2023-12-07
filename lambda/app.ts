@@ -5,7 +5,7 @@ import { APIGatewayRequestAuthorizerEvent, Context, APIGatewayAuthorizerResult, 
 import { Subscription, AuthType, ServiceType, RegisterService, PostedPushNoticationData, NoticationData, NoticationUserPayload } from 'afp-apicore-sdk/dist/types';
 import { ApiCoreNotificationCenter } from 'afp-apicore-sdk/dist//apicore/notification';
 import webpush, { VapidKeys, PushSubscription, SendResult } from 'web-push';
-import { ALL, AccessStorage, UserPreferences, WebPushUserDocument, parseBoolean } from './databases';
+import { ALL, AccessStorage, UserPreferences, parseBoolean } from './databases';
 import { parse } from 'auth-header';
 import { base64decode } from 'nodejs-base64';
 import { randomUUID } from 'crypto';
@@ -361,7 +361,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
 
         await this.accessStorage.storeSubscription({
             uno: notificationIdentifier,
-            browserID: browserID,
+            browserID: [browserID],
             name: identifier,
             owner: identity.principalId,
             subscription: notification,
@@ -573,7 +573,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
     }
 
     private async getWebPushUserKey(principalId: string, browserID: string): Promise<APIGatewayProxyResult> {
-        const webPushKeys = await this.accessStorage.findPushKeyForIdentity(principalId, browserID);
+        const webPushKeys = await this.accessStorage.findPushKeyForIdentity(principalId, [browserID]);
 
         return {
             statusCode: 200,

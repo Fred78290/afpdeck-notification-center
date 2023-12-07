@@ -1,17 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { DynamoDB } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb';
-import { defineTable, TableClient, QueryKeys } from '@hexlabs/dynamo-ts';
-import {
-    ALL,
-    AccessStorage,
-    UserPreferencesDocument,
-    WebPushUserDocument,
-    SubscriptionDocument,
-    RegisterSubscriptionDocument,
-    RegisteredSubscriptionDocument,
-    DeletedSubscriptionRemainder,
-} from '../index';
+import { defineTable, TableClient } from '@hexlabs/dynamo-ts';
+import { ALL, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument, DeletedSubscriptionRemainder } from '../index';
 
 const userPreferencesTable = defineTable(
     {
@@ -46,27 +37,12 @@ const webPushUserTable = defineTable(
     },
 );
 
-const subscriptionByBrowserTable = defineTable(
-    {
-        owner: 'string',
-        name: 'string',
-        browserID: 'string',
-    },
-    'name',
-    'owner',
-    {
-        browserID: {
-            partitionKey: 'browserID',
-            sortKey: 'name',
-        },
-    },
-);
-
 const subscriptionsTable = defineTable(
     {
         owner: 'string',
         name: 'string',
         uno: 'string',
+        browserID: 'string set',
         subscription: 'string',
         created: 'number',
         updated: 'number',
@@ -82,17 +58,15 @@ const subscriptionsTable = defineTable(
 );
 
 type UserPreferencesTable = typeof userPreferencesTable;
-type SubscriptionByBrowserTable = typeof subscriptionByBrowserTable;
 type SubscriptionsTable = typeof subscriptionsTable;
 type WebPushUserTable = typeof webPushUserTable;
 
 export class DynamoDBAccessStorage implements AccessStorage {
     private userPreferencesTableClient: TableClient<UserPreferencesTable>;
     private subscriptionTableClient: TableClient<SubscriptionsTable>;
-    private subscriptionByBrowserTableClient: TableClient<SubscriptionByBrowserTable>;
     private webPushUserTableClient: TableClient<WebPushUserTable>;
 
-    constructor(userPreferencesTableName: string, webPushUserTableName: string, subscriptionTableName: string, subscriptionByBrowserName: string) {
+    constructor(userPreferencesTableName: string, webPushUserTableName: string, subscriptionTableName: string) {
         const dynamo = new DynamoDB();
         const client = DynamoDBDocument.from(dynamo);
 
@@ -112,12 +86,6 @@ export class DynamoDBAccessStorage implements AccessStorage {
             client: client,
             logStatements: true,
             tableName: subscriptionTableName,
-        });
-
-        this.subscriptionByBrowserTableClient = TableClient.build(subscriptionByBrowserTable, {
-            client: client,
-            logStatements: true,
-            tableName: subscriptionByBrowserName,
         });
     }
 
@@ -248,44 +216,33 @@ export class DynamoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public findPushKeyForIdentity(principalId: string, browserID: string): Promise<WebPushUserDocument[]> {
+    public findPushKeyForIdentity(principalId: string, browserID: string[]): Promise<WebPushUserDocument[]> {
         return new Promise<WebPushUserDocument[]>((resolve, reject) => {
-            let query: QueryKeys<WebPushUserTable>;
-
-            if (browserID === ALL) {
-                query = {
-                    owner: principalId,
-                };
-            } else {
-                query = {
-                    owner: principalId,
-                    browserID: (sortKeys) => sortKeys.eq(browserID),
-                };
-            }
-
             this.webPushUserTableClient
-                .queryAll(query)
+                .queryAll({ owner: principalId })
                 .then((result) => {
                     const docs: WebPushUserDocument[] = [];
 
                     result.member.forEach((item) => {
-                        docs.push({
-                            owner: item.owner,
-                            browserID: item.browserID,
-                            created: new Date(item.created),
-                            updated: new Date(item.updated),
-                            apiKeys: {
-                                publicKey: item.publicKey,
-                                privateKey: item.privateKey,
-                            },
-                            subscription: {
-                                endpoint: item.endpoint,
-                                keys: {
-                                    auth: item.auth,
-                                    p256dh: item.p256dh,
+                        if (browserID.includes(ALL) || browserID.includes(item.browserID)) {
+                            docs.push({
+                                owner: item.owner,
+                                browserID: item.browserID,
+                                created: new Date(item.created),
+                                updated: new Date(item.updated),
+                                apiKeys: {
+                                    publicKey: item.publicKey,
+                                    privateKey: item.privateKey,
                                 },
-                            },
-                        });
+                                subscription: {
+                                    endpoint: item.endpoint,
+                                    keys: {
+                                        auth: item.auth,
+                                        p256dh: item.p256dh,
+                                    },
+                                },
+                            });
+                        }
                     });
 
                     resolve(docs);
@@ -391,58 +348,28 @@ export class DynamoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public getSubscriptions(owner: string): Promise<RegisteredSubscriptionDocument[]> {
-        return new Promise<RegisteredSubscriptionDocument[]>((resolve, reject) => {
+    public getSubscriptions(owner: string): Promise<SubscriptionDocument[]> {
+        return new Promise<SubscriptionDocument[]>((resolve, reject) => {
             this.subscriptionTableClient
                 .queryAll({
                     owner: owner,
                 })
                 .then((subscriptions) => {
-                    const docs: RegisteredSubscriptionDocument[] = [];
-                    const alls: Promise<RegisteredSubscriptionDocument>[] = [];
+                    const docs: SubscriptionDocument[] = [];
 
-                    alls.push(
-                        new Promise<RegisteredSubscriptionDocument>((resolve, reject) => {
-                            subscriptions.member.forEach((item) => {
-                                this.subscriptionByBrowserTableClient
-                                    .queryAll(
-                                        {
-                                            name: item.name,
-                                        },
-                                        {
-                                            filter: (filter) => filter().owner.eq(item.owner),
-                                        },
-                                    )
-                                    .then((browsers) => {
-                                        const doc: RegisteredSubscriptionDocument = {
-                                            owner: item.owner,
-                                            name: item.name,
-                                            browserID: browsers.member.map((browser) => browser.browserID),
-                                            subscription: JSON.parse(item.subscription),
-                                            uno: item.uno,
-                                            created: new Date(item.created),
-                                            updated: new Date(item.updated),
-                                        };
-                                        resolve(doc);
-                                    })
-                                    .catch((e) => {
-                                        reject(e);
-                                    });
-                            });
-                        }),
-                    );
-
-                    Promise.allSettled(alls)
-                        .then((results) => {
-                            results.forEach((item) => {
-                                if (item.status === 'fulfilled') {
-                                    docs.push(item.value);
-                                }
-                            });
-                        })
-                        .catch((e) => {
-                            reject(e);
+                    subscriptions.member.forEach((item) => {
+                        docs.push({
+                            name: item.name,
+                            owner: item.owner,
+                            browserID: Array.from(item.browserID.values()),
+                            uno: item.uno,
+                            created: new Date(item.created),
+                            updated: new Date(item.updated),
+                            subscription: JSON.parse(item.subscription),
                         });
+                    });
+
+                    resolve(docs);
                 })
                 .catch((e) => {
                     reject(e);
@@ -450,8 +377,8 @@ export class DynamoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public getSubscription(owner: string, name: string): Promise<RegisteredSubscriptionDocument | null> {
-        return new Promise<RegisteredSubscriptionDocument | null>((resolve, reject) => {
+    public getSubscription(owner: string, name: string): Promise<SubscriptionDocument | null> {
+        return new Promise<SubscriptionDocument | null>((resolve, reject) => {
             this.subscriptionTableClient
                 .get({
                     owner: owner,
@@ -461,40 +388,18 @@ export class DynamoDBAccessStorage implements AccessStorage {
                     if (results.item) {
                         const item = results.item;
 
-                        new Promise<string[]>((resolve, reject) => {
-                            this.subscriptionByBrowserTableClient
-                                .queryAll(
-                                    {
-                                        name: item.name,
-                                    },
-                                    {
-                                        filter: (filter) => filter().owner.eq(item.owner),
-                                    },
-                                )
-                                .then((browsers) => {
-                                    resolve(browsers.member.map((browser) => browser.browserID));
-                                })
-                                .catch((e) => {
-                                    reject(e);
-                                });
-                        })
-                            .then((results) => {
-                                resolve({
-                                    owner: item.owner,
-                                    name: item.name,
-                                    browserID: results,
-                                    subscription: JSON.parse(item.subscription),
-                                    uno: item.uno,
-                                    created: new Date(item.created),
-                                    updated: new Date(item.updated),
-                                });
-                            })
-                            .catch((e) => {
-                                reject(e);
-                            });
+                        resolve({
+                            owner: item.owner,
+                            name: item.name,
+                            browserID: Array.from(item.browserID.values()),
+                            subscription: JSON.parse(item.subscription),
+                            uno: item.uno,
+                            created: new Date(item.created),
+                            updated: new Date(item.updated),
+                        });
+                    } else {
+                        resolve(null);
                     }
-
-                    resolve(null);
                 })
                 .catch((e) => {
                     reject(e);
@@ -502,7 +407,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public storeSubscription(subscription: RegisterSubscriptionDocument): Promise<void> {
+    public storeSubscription(subscription: SubscriptionDocument): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             this.subscriptionTableClient
                 .get({
@@ -510,147 +415,149 @@ export class DynamoDBAccessStorage implements AccessStorage {
                     name: subscription.name,
                 })
                 .then((result) => {
-                    this.subscriptionTableClient
-                        .update({
-                            key: {
-                                name: subscription.name,
-                                owner: subscription.owner,
-                            },
-                            updates: {
-                                uno: subscription.uno,
-                                subscription: JSON.stringify(subscription.subscription),
-                                updated: Date.now(),
-                            },
-                        })
-                        .then((result) => {
-                            this.subscriptionByBrowserTableClient
-                                .index('browserID')
-                                .queryAll(
-                                    {
-                                        browserID: subscription.browserID,
-                                        name: (sortKey) => sortKey.eq(subscription.name),
-                                    },
-                                    {
-                                        filter: (compare) => compare().owner.eq(subscription.owner),
-                                    },
-                                )
-                                .then((found) => {
-                                    if (found.member.length == 0) {
-                                        this.subscriptionByBrowserTableClient
-                                            .put({
-                                                browserID: subscription.browserID,
-                                                name: subscription.name,
-                                                owner: subscription.owner,
-                                            })
-                                            .then(() => {
-                                                resolve();
-                                            })
-                                            .catch((e) => {
-                                                reject(e);
-                                            });
-                                    } else {
-                                        resolve();
-                                    }
-                                })
-                                .catch((e) => {
-                                    reject(e);
-                                });
-                        })
-                        .catch((e) => {
-                            reject(e);
-                        });
-                })
-                .catch((e) => {
-                    const now = Date.now();
+                    if (result.item) {
+                        const item = result.item;
+                        const browserID = item.browserID;
 
-                    this.subscriptionTableClient
-                        .put(
-                            {
-                                owner: subscription.owner,
-                                uno: subscription.uno,
-                                name: subscription.name,
-                                subscription: JSON.stringify(subscription.subscription),
-                                created: now,
-                                updated: now,
-                            },
-                            {
-                                returnValues: 'NONE',
-                            },
-                        )
-                        .then((result) => {
-                            this.subscriptionByBrowserTableClient
-                                .put({
-                                    owner: subscription.owner,
+                        subscription.browserID.forEach((item) => {
+                            if (!browserID.has(item)) {
+                                browserID.add(item);
+                            }
+                        });
+
+                        this.subscriptionTableClient
+                            .update({
+                                key: {
                                     name: subscription.name,
-                                    browserID: subscription.browserID,
-                                })
-                                .then(() => {
-                                    resolve();
-                                })
-                                .catch((e) => {
-                                    reject(e);
-                                });
-                        })
-                        .catch((e) => {
-                            reject(e);
-                        });
-                });
-        });
-    }
-
-    public deleteSubscription(owner: string, name: string, browserID: string): Promise<DeletedSubscriptionRemainder> {
-        return new Promise<DeletedSubscriptionRemainder>((resolve, reject) => {
-            this.subscriptionByBrowserTableClient
-                .delete(
-                    {
-                        owner: owner,
-                        name: name,
-                    },
-                    {
-                        condition: browserID === ALL ? undefined : (condition) => condition().browserID.eq(browserID),
-                        returnValues: 'ALL_OLD',
-                    },
-                )
-                .then((result) => {
-                    if (browserID === ALL) {
-                        resolve({
-                            identifier: name,
-                        });
-                    } else {
-                        this.subscriptionByBrowserTableClient
-                            .queryAll({
-                                name: name,
-                                owner: (sortKey) => sortKey.eq(owner),
+                                    owner: subscription.owner,
+                                },
+                                updates: {
+                                    uno: subscription.uno,
+                                    subscription: JSON.stringify(subscription.subscription),
+                                    browserID: browserID,
+                                    updated: Date.now(),
+                                },
                             })
-                            .then((results) => {
-                                const remains = results.member.map((item) => item.browserID);
+                            .then((result) => {
+                                resolve();
+                            })
+                            .catch((e) => {
+                                reject(e);
+                            });
+                    } else {
+                        const now = Date.now();
 
-                                if (remains.length > 0) {
-                                    resolve({
-                                        identifier: name,
-                                        remains: remains,
-                                    });
-                                } else {
-                                    this.subscriptionTableClient
-                                        .delete({
-                                            owner: owner,
-                                            name: name,
-                                        })
-                                        .then(() => {
-                                            resolve({
-                                                identifier: name,
-                                            });
-                                        })
-                                        .catch((e) => {
-                                            reject(e);
-                                        });
-                                }
+                        this.subscriptionTableClient
+                            .put(
+                                {
+                                    owner: subscription.owner,
+                                    uno: subscription.uno,
+                                    name: subscription.name,
+                                    browserID: new Set<string>(subscription.browserID),
+                                    subscription: JSON.stringify(subscription.subscription),
+                                    created: now,
+                                    updated: now,
+                                },
+                                {
+                                    returnValues: 'NONE',
+                                },
+                            )
+                            .then((result) => {
+                                resolve();
+                            })
+                            .catch((e) => {
+                                reject(e);
                             });
                     }
                 })
                 .catch((e) => {
                     reject(e);
                 });
+        });
+    }
+
+    public deleteSubscription(owner: string, name: string, browserID: string): Promise<DeletedSubscriptionRemainder> {
+        return new Promise<DeletedSubscriptionRemainder>((resolve, reject) => {
+            if (browserID === ALL) {
+                this.subscriptionTableClient
+                    .delete({
+                        name: name,
+                        owner: owner,
+                    })
+                    .then(() => {
+                        resolve({
+                            identifier: name,
+                        });
+                    })
+                    .catch((e) => {
+                        reject(e);
+                    });
+            } else {
+                this.subscriptionTableClient
+                    .get({
+                        owner: owner,
+                        name: name,
+                    })
+                    .then((result) => {
+                        if (result.item) {
+                            const item = result.item;
+                            const browserIDs = item.browserID;
+
+                            if (browserIDs.has(browserID)) {
+                                browserIDs.delete(browserID);
+
+                                if (browserIDs.size > 0) {
+                                    this.subscriptionTableClient
+                                        .update({
+                                            key: {
+                                                name: name,
+                                                owner: owner,
+                                            },
+                                            updates: {
+                                                browserID: browserIDs,
+                                                updated: Date.now(),
+                                            },
+                                        })
+                                        .then((result) => {
+                                            resolve({
+                                                identifier: item.uno,
+                                                remains: Array.from(browserIDs.values()),
+                                            });
+                                        })
+                                        .catch((e) => {
+                                            reject(e);
+                                        });
+                                } else {
+                                    this.subscriptionTableClient
+                                        .delete({
+                                            name: name,
+                                            owner: owner,
+                                        })
+                                        .then(() => {
+                                            resolve({
+                                                identifier: item.uno,
+                                            });
+                                        })
+                                        .catch((e) => {
+                                            reject(e);
+                                        });
+                                }
+                            } else {
+                                resolve({
+                                    identifier: item.uno,
+                                    remains: Array.from(browserIDs.values()),
+                                });
+                            }
+                        } else {
+                            resolve({
+                                identifier: name,
+                            });
+                        }
+                    })
+                    .catch((e) => {
+                        reject(e);
+                    });
+            }
         });
     }
 }

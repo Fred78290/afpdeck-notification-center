@@ -245,7 +245,7 @@ Resources:
         - AttributeName: uno
           AttributeType: S
         - AttributeName: browserID
-          AttributeType: S
+          AttributeType: SS
         - AttributeName: created
           AttributeType: N
       KeySchema:

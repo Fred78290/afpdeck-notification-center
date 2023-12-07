@@ -1,10 +1,10 @@
 import minimist from 'minimist'
 
 interface UsageInfo {
-	[arg: string]: UsageInfo | string | string[] | undefined
-	name?: string
-	description: string
-	options?: string[]
+    [arg: string]: UsageInfo | string | string[] | undefined
+    name?: string
+    description: string
+    options?: string[]
 }
 
 function describeCommand (name: string, usage: UsageInfo, level: number = 0) {
@@ -18,9 +18,9 @@ function describeCommand (name: string, usage: UsageInfo, level: number = 0) {
         })
     }
 
-	result += '\n'
+    result += '\n'
 
-	Object.keys(usage).forEach((key) => {
+    Object.keys(usage).forEach((key) => {
         const value = usage[key]
 
         if (key !== 'description' && key !== 'options' && key !== 'name' && typeof value === 'object') {
@@ -41,16 +41,16 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
             get: {
                 description: 'Get web-push key',
                 options: [
-					'--username=<username>',
-					'--password=<password>',
-					'--browser-identifier=<browser-id>'
+                    '--username=<username>',
+                    '--password=<password>',
+                    '--browser-identifier=<browser-id>'
                 ]
             },
             store: {
                 description: 'Store web-push key',
                 options: [
-					'--username=<username>',
-					'--password=<password>',
+                    '--username=<username>',
+                    '--password=<password>',
                     '--browser-identifier=<browser-id>',
                     '--endpoint=<url>',
                     '--key=<browser key>]',
@@ -64,8 +64,8 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
             delete: {
                 description: 'Delete web-push key',
                 options: [
-					'--username=<username>',
-					'--password=<password>',
+                    '--username=<username>',
+                    '--password=<password>',
                     '--browser-identifier=<browser-id>'
                 ]
             }
@@ -75,16 +75,16 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
             get: {
                 description: 'Get user preferences',
                 options: [
-					'--username=<username>',
-					'--password=<password>',
+                    '--username=<username>',
+                    '--password=<password>',
                     '--name=<name>'
                 ]
             },
             store: {
                 description: 'Store user preference',
                 options: [
-					'--username=<username>',
-					'--password=<password>',
+                    '--username=<username>',
+                    '--password=<password>',
                     '--name=<name>',
                     '--data=<path to user pref>'
                 ]
@@ -92,8 +92,8 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
             delete: {
                 description: 'Delete user preference',
                 options: [
-					'--username=<username>',
-					'--password=<password>',
+                    '--username=<username>',
+                    '--password=<password>',
                     '--name=<name>'
                 ]
             }
@@ -103,16 +103,16 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
             get: {
                 description: 'Get subscription',
                 options: [
-					'--username=<username>',
-					'--password=<password>',
+                    '--username=<username>',
+                    '--password=<password>',
                     '--name=<name>'
                 ]
             },
             store: {
                 description: 'Store subscription',
                 options: [
-					'--username=<username>',
-					'--password=<password>',
+                    '--username=<username>',
+                    '--password=<password>',
                     '--name=<name>',
                     '--data=<path to json>'
                 ]
@@ -120,8 +120,8 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
             delete: {
                 description: 'Delete subscription',
                 options: [
-					'--username=<username>',
-					'--password=<password>',
+                    '--username=<username>',
+                    '--password=<password>',
                     '--name=<name>'
                 ]
             }
