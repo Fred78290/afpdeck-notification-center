@@ -244,8 +244,6 @@ Resources:
           AttributeType: S
         - AttributeName: uno
           AttributeType: S
-        - AttributeName: browserID
-          AttributeType: SS
         - AttributeName: created
           AttributeType: N
       KeySchema:
@@ -263,19 +261,8 @@ Resources:
           Projection:
             ProjectionType: INCLUDE
             NonKeyAttributes:
-              - subscription
-              - updated
-        - IndexName: browserID-index
-          KeySchema:
-            - AttributeName: browserID
-              KeyType: HASH
-            - AttributeName: created
-              KeyType: RANGE
-          Projection:
-            ProjectionType: INCLUDE
-            NonKeyAttributes:
-              - subscription
-              - updated
+              - name
+              - owner
 
   AfpDeckWebPushUserTable:
     Type: AWS::DynamoDB::Table
