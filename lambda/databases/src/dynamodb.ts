@@ -2,7 +2,7 @@
 import { DynamoDB } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb';
 import { defineTable, TableClient } from '@hexlabs/dynamo-ts';
-import { ALL, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument, DeletedSubscriptionRemainder } from '../index';
+import { ALL, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument, DeletedSubscriptionRemainder, DatabaseError, ERROR_RESOURCE_NOTFOUND } from '../index';
 
 const userPreferencesTable = defineTable(
     {
@@ -120,54 +120,52 @@ export class DynamoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public getUserPreferences(principalId: string, name: string): Promise<UserPreferencesDocument[]> {
-        return new Promise<UserPreferencesDocument[]>((resolve, reject) => {
-            if (name === ALL) {
-                this.userPreferencesTableClient
-                    .queryAll({
-                        owner: principalId,
-                    })
-                    .then((results) => {
-                        const alls: UserPreferencesDocument[] = [];
+    public getUserPreferences(principalId: string): Promise<UserPreferencesDocument[] | null> {
+        return new Promise<UserPreferencesDocument[] | null>((resolve, reject) => {
+            this.userPreferencesTableClient
+                .queryAll({
+                    owner: principalId,
+                })
+                .then((result) => {
+                    const prefs: UserPreferencesDocument[] = [];
 
-                        results.member.forEach((item) => {
-                            alls.push({
-                                name: item.name,
-                                owner: item.owner,
-                                preferences: JSON.parse(item.preferences),
-                                updated: new Date(item.updated),
-                            });
+                    result.member.forEach((item) => {
+                        prefs.push({
+                            name: item.name,
+                            owner: item.owner,
+                            preferences: JSON.parse(item.preferences),
+                            updated: new Date(item.updated),
                         });
+                    });
+                })
+                .catch((e) => {
+                    reject(e);
+                });
+        });
+    }
 
-                        resolve(alls);
-                    })
-                    .catch((e) => {
-                        reject(e);
-                    });
-            } else {
-                this.userPreferencesTableClient
-                    .get({
-                        owner: principalId,
-                        name: name,
-                    })
-                    .then((result) => {
-                        if (result.item) {
-                            resolve([
-                                {
-                                    name: result.item?.name,
-                                    owner: result.item?.owner,
-                                    preferences: JSON.parse(result.item?.preferences),
-                                    updated: new Date(result.item?.updated),
-                                },
-                            ]);
-                        } else {
-                            reject(new Error('Not found'));
-                        }
-                    })
-                    .catch((e) => {
-                        reject(e);
-                    });
-            }
+    public getUserPreference(principalId: string, name: string): Promise<UserPreferencesDocument | null> {
+        return new Promise<UserPreferencesDocument | null>((resolve, reject) => {
+            this.userPreferencesTableClient
+                .get({
+                    owner: principalId,
+                    name: name,
+                })
+                .then((result) => {
+                    if (result.item) {
+                        resolve({
+                            name: result.item?.name,
+                            owner: result.item?.owner,
+                            preferences: JSON.parse(result.item?.preferences),
+                            updated: new Date(result.item?.updated),
+                        });
+                    } else {
+                        resolve(null);
+                    }
+                })
+                .catch((e) => {
+                    reject(e);
+                });
         });
     }
 
@@ -487,6 +485,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
                     .then(() => {
                         resolve({
                             identifier: name,
+                            remains: [],
                         });
                     })
                     .catch((e) => {
@@ -536,6 +535,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
                                         .then(() => {
                                             resolve({
                                                 identifier: item.uno,
+                                                remains: [],
                                             });
                                         })
                                         .catch((e) => {
@@ -549,9 +549,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
                                 });
                             }
                         } else {
-                            resolve({
-                                identifier: name,
-                            });
+                            reject(new DatabaseError(404, ERROR_RESOURCE_NOTFOUND));
                         }
                     })
                     .catch((e) => {

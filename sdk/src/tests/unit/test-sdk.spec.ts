@@ -1,5 +1,5 @@
 import * as dotenv from 'dotenv'
-import { Token } from 'afp-apicore-sdk/dist/types'
+import { Subscription, Token } from 'afp-apicore-sdk/dist/types'
 import AfpDeckNotificationCenter from '../../afpdeck-notification-center'
 import testSubscription from './testSubscription.json'
 import testWebPushKey from './testWebPushKey.json'
@@ -147,7 +147,7 @@ describe('afpdeck-notification-center sdk', () => {
 
     it('verifies successful registerNotification', async () => {
         console.log('verifies successful registerNotification')
-        const result = await afpdeck.registerNotification(subscriptionName, serviceName, testSubscription, serviceDefinition)
+        const result = await afpdeck.registerNotification(subscriptionName, serviceName, testSubscription as Subscription, serviceDefinition)
 
         expect(result).toBeDefined()
         expect(result.status.code).toBeGreaterThanOrEqual(0)
@@ -155,7 +155,7 @@ describe('afpdeck-notification-center sdk', () => {
 
     it('verifies successful listSubscriptions', async () => {
         console.log('verifies successful listSubscriptions')
-        const result = await afpdeck.listSubscriptions(serviceDefinition)
+        const result = await afpdeck.listSubscriptions()
 
         expect(result).toBeDefined()
         expect(result?.map(n => n.name)).toContain(subscriptionName)
@@ -163,7 +163,7 @@ describe('afpdeck-notification-center sdk', () => {
 
     it('verifies successful deleteNotification', async () => {
         console.log('verifies successful deleteNotification')
-        const result = await afpdeck.deleteNotification(subscriptionName, serviceDefinition)
+        const result = await afpdeck.deleteNotification(subscriptionName)
 
         expect(result).toBeDefined()
         expect(result.status.code).toBeGreaterThanOrEqual(0)
@@ -171,7 +171,7 @@ describe('afpdeck-notification-center sdk', () => {
 
     it('verifies successful storeUserPreferences', async () => {
         console.log('verifies successful storeUserPreferences')
-        const result = await afpdeck.storeUserPreferences(subscriptionName, testUserPreferences)
+        const result = await afpdeck.storeUserPreference(subscriptionName, testUserPreferences)
 
         expect(result).toBeDefined()
         expect(result.status.code).toBeGreaterThanOrEqual(0)
@@ -179,15 +179,15 @@ describe('afpdeck-notification-center sdk', () => {
 
     it('verifies successful getUserPreferences', async () => {
         console.log('verifies successful getUserPreferences')
-        const result = await afpdeck.getUserPreferences(subscriptionName)
+        const result = await afpdeck.getUserPreference(subscriptionName)
 
-        expect(result).toBeDefined()
-        expect(result).toEqual(testUserPreferences)
+		expect(result).toBeDefined()
+        expect(result?.preferences).toEqual(testUserPreferences)
     }, DEFAULT_TIMEOUT)
 
     it('verifies successful update UserPreferences', async () => {
         console.log('verifies successful update UserPreferences')
-        const result = await afpdeck.storeUserPreferences(subscriptionName, testUserPreferences)
+        const result = await afpdeck.storeUserPreference(subscriptionName, testUserPreferences)
 
         expect(result).toBeDefined()
         expect(result.status.code).toBeGreaterThanOrEqual(0)
@@ -195,7 +195,7 @@ describe('afpdeck-notification-center sdk', () => {
 
     it('verifies successful deleteUserPreferences', async () => {
         console.log('verifies successful update UserPreferences')
-        const result = await afpdeck.deleteUserPreferences(subscriptionName)
+        const result = await afpdeck.deleteUserPreference(subscriptionName)
 
         expect(result).toBeDefined()
         expect(result.status.code).toBeGreaterThanOrEqual(0)

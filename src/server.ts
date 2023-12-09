@@ -237,9 +237,10 @@ export async function createApp(options: AppOptions): Promise<ServerApp> {
 
 				router.post("/push", handleRequest);
 
-				router.post("/preferences/:identifier", handleRequest);
-				router.get("/preferences/:identifier", handleRequest);
-				router.delete("/preferences/:identifier", handleRequest);
+				router.get("/preferences", handleRequest);
+				router.post("/preference/:identifier", handleRequest);
+				router.get("/preference/:identifier", handleRequest);
+				router.delete("/preference/:identifier", handleRequest);
 
 				router.get("/", handleRequest);
 				router.all("/*", notFound);

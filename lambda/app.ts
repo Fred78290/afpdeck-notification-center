@@ -5,7 +5,7 @@ import { APIGatewayRequestAuthorizerEvent, Context, APIGatewayAuthorizerResult, 
 import { Subscription, AuthType, ServiceType, RegisterService, PostedPushNoticationData, NoticationData, NoticationUserPayload } from 'afp-apicore-sdk/dist/types';
 import { ApiCoreNotificationCenter } from 'afp-apicore-sdk/dist//apicore/notification';
 import webpush, { VapidKeys, PushSubscription, SendResult } from 'web-push';
-import { ALL, AccessStorage, UserPreferences, parseBoolean } from './databases';
+import { ALL, AccessStorage, parseBoolean } from './databases';
 import { parse } from 'auth-header';
 import { base64decode } from 'nodejs-base64';
 import { randomUUID } from 'crypto';
@@ -328,9 +328,28 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         return notificationCenter;
     }
 
-    private async listSubscriptions(identity: Identify, serviceDefinition: ServiceDefinition): Promise<APIGatewayProxyResult> {
-        const notificationCenter = await this.checkIfServiceIsRegistered(identity, serviceDefinition);
-        const subscriptions = await notificationCenter.listSubscriptions();
+    private async listSubscriptions(identity: Identify, browserID: string): Promise<APIGatewayProxyResult> {
+        const notificationCenter = this.getNotificationCenter(identity);
+        let subscriptions = await notificationCenter.listSubscriptions();
+
+        if (browserID !== ALL && subscriptions) {
+            const alls = await Promise.all(
+                subscriptions.map(async (subscription) => {
+                    return new Promise<boolean>((resolve, reject) => {
+                        this.accessStorage
+                            .getSubscription(identity.principalId, subscription.name)
+                            .then((found) => {
+                                resolve(found ? found.browserID.includes(browserID) : false);
+                            })
+                            .catch((e) => {
+                                resolve(false);
+                            });
+                    });
+                }),
+            );
+
+            subscriptions = subscriptions.filter((_v, index) => alls[index]);
+        }
 
         return {
             statusCode: 200,
@@ -346,9 +365,25 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         };
     }
 
-    private async addSubscription(notificationCenter: ApiCoreNotificationCenter, identifier: string, notification: Subscription, serviceDefinition: ServiceDefinition) {
+    private async addSubscriptionIfNotExists(notificationCenter: ApiCoreNotificationCenter, identifier: string, notification: Subscription, serviceDefinition: ServiceDefinition): Promise<string> {
         if (this.registerService) {
-            return await notificationCenter.addSubscription(identifier, serviceDefinition.definition.name, notification);
+            return new Promise<string>((resolve, reject) => {
+                notificationCenter
+                    .getSubscription(identifier)
+                    .then((found) => {
+                        resolve(found.identifier);
+                    })
+                    .catch((e) => {
+                        notificationCenter
+                            .addSubscription(identifier, serviceDefinition.definition.name, notification)
+                            .then((created) => {
+                                resolve(created);
+                            })
+                            .catch((e) => {
+                                reject(e);
+                            });
+                    });
+            });
         } else {
             return randomUUID();
         }
@@ -357,7 +392,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
     private async registerNotification(identifier: string, notification: Subscription, identity: Identify, serviceDefinition: ServiceDefinition, browserID: string): Promise<APIGatewayProxyResult> {
         const now = new Date();
         const notificationCenter = await this.checkIfServiceIsRegistered(identity, serviceDefinition);
-        const notificationIdentifier = await this.addSubscription(notificationCenter, identifier, notification, serviceDefinition);
+        const notificationIdentifier = await this.addSubscriptionIfNotExists(notificationCenter, identifier, notification, serviceDefinition);
 
         await this.accessStorage.storeSubscription({
             uno: notificationIdentifier,
@@ -467,14 +502,14 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         return OK;
     }
 
-    private async deleteNotification(identifier: string, identity: Identify, serviceDefinition: ServiceDefinition, browserID: string): Promise<APIGatewayProxyResult> {
+    private async deleteNotification(identifier: string, identity: Identify, browserID: string): Promise<APIGatewayProxyResult> {
         const notificationCenter = this.getNotificationCenter(identity);
 
         try {
             const result = await this.accessStorage.deleteSubscription(identity.principalId, identifier, browserID);
 
             // Delete subscription in apicore if all or any browser remains
-            if (this.registerService && (browserID === ALL || result.remains?.length === 0)) {
+            if (this.registerService && (browserID === ALL || result.remains.length === 0)) {
                 await notificationCenter.deleteSubscription(identifier);
             }
 
@@ -600,30 +635,36 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         return OK;
     }
 
-    private async getUserPreferences(principalId: string, name: string): Promise<APIGatewayProxyResult> {
+    private async getUserPreferences(principalId: string): Promise<APIGatewayProxyResult> {
         try {
-            const found = await this.accessStorage.getUserPreferences(principalId, name);
-            let prefs: UserPreferences | UserPreferences[] | undefined = undefined;
+            const prefs = await this.accessStorage.getUserPreferences(principalId);
 
-            if (found.length > 0) {
-                if (found.length > 1) {
-                    const alls: UserPreferences[] = [];
+            if (prefs) {
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({
+                        response: {
+                            preferences: prefs,
+                            status: {
+                                status: 0,
+                                message: 'OK',
+                            },
+                        },
+                    }),
+                };
+            }
 
-                    prefs = alls;
+            return NOT_FOUND;
+        } catch (e: any) {
+            return NOT_FOUND;
+        }
+    }
 
-                    found.forEach((pref) => {
-                        alls.push({
-                            name: pref.name,
-                            preferences: pref.preferences,
-                        });
-                    });
-                } else {
-                    prefs = {
-                        name: found[0].name,
-                        preferences: found[0].preferences,
-                    };
-                }
+    private async getUserPreference(principalId: string, name: string): Promise<APIGatewayProxyResult> {
+        try {
+            const prefs = await this.accessStorage.getUserPreference(principalId, name);
 
+            if (prefs) {
                 return {
                     statusCode: 200,
                     body: JSON.stringify({
@@ -685,7 +726,6 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                         throw new HttpError('Missing parameters to push subscription', 400);
                     }
                 } else {
-                    const serviceIdentifier = this.getServiceDefinition(event.queryStringParameters);
                     const browserID = event.queryStringParameters?.browserID ?? ALL;
                     const identity = {
                         principalId: authorizer?.principalId,
@@ -717,16 +757,22 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                     } else if (event.resource.startsWith('/notification')) {
                         // Notification API
                         if (method === 'GET') {
-                            response = this.listSubscriptions(identity, serviceIdentifier);
+                            response = this.listSubscriptions(identity, browserID);
                         } else if (method === 'DELETE') {
                             if (event.pathParameters?.identifier) {
-                                response = this.deleteNotification(event.pathParameters?.identifier, identity, serviceIdentifier, browserID);
+                                response = this.deleteNotification(event.pathParameters?.identifier, identity, browserID);
                             } else {
                                 throw new HttpError('Missing parameters to delete subscription', 400);
                             }
                         } else if (method === 'POST') {
                             if (event.body && event.pathParameters?.identifier) {
-                                response = this.registerNotification(event.pathParameters?.identifier, JSON.parse(event.body), identity, serviceIdentifier, browserID);
+                                response = this.registerNotification(
+                                    event.pathParameters?.identifier,
+                                    JSON.parse(event.body),
+                                    identity,
+                                    this.getServiceDefinition(event.queryStringParameters),
+                                    browserID,
+                                );
                             } else {
                                 throw new HttpError('Missing parameters to register subscription', 400);
                             }
@@ -735,9 +781,16 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                         }
                     } else if (event.resource.startsWith('/preferences')) {
                         // Preferences API
+                        if (method === 'GET') {
+                            response = this.getUserPreferences(identity.principalId);
+                        } else {
+                            throw new HttpError('Method Not Allowed', 406);
+                        }
+                    } else if (event.resource.startsWith('/preference/')) {
+                        // Preferences API
                         if (event.pathParameters?.identifier) {
                             if (method === 'GET') {
-                                response = this.getUserPreferences(identity.principalId, event.pathParameters?.identifier);
+                                response = this.getUserPreference(identity.principalId, event.pathParameters?.identifier);
                             } else if (method === 'DELETE') {
                                 response = this.deleteUserPreferences(identity.principalId, event.pathParameters?.identifier);
                             } else if (method === 'POST') {

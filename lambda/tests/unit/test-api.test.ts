@@ -1,7 +1,8 @@
 /* eslint-disable prettier/prettier */
 import { APIGatewayProxyEvent, APIGatewayProxyEventQueryStringParameters, APIGatewayProxyEventPathParameters } from 'aws-lambda';
 import { AfpDeckNotificationCenterHandler } from '../../app';
-import database, { parseBoolean } from '../../databases';
+import database, { ALL, parseBoolean } from '../../databases';
+import { CommonResponse, RegisterSubscriptionsResponse, ListSubscriptionsResponse, DeleteSubscriptionsResponse, WebPushUserKeyResponse, UserPreferenceResponse } from '../../types';
 import { DynamoDB, DeleteTableCommandOutput, CreateTableCommandInput } from '@aws-sdk/client-dynamodb';
 import testSubscription from './testSubscription.json';
 import testPush from './testPush.json';
@@ -16,6 +17,7 @@ const DEFAULT_TIMEOUT = 30000;
 dotenv.config({ path: __dirname + '/../../configs/.env' });
 
 const browserID = 'B46FBAE9-C6A7-4FFC-AB72-C59D30613B49';
+const altBrowserID = '5A5DBDB3-3F38-4844-8EA8-7E14BE9AFED6';
 const webPushTableName = 'test-afpdeck-webpush';
 const subscriptionsTableName = 'test-afpdeck-subscriptions';
 const userPrefrencesTableName = 'test-afpdeck-preferences';
@@ -33,10 +35,6 @@ const serviceDefinition = {
 	serviceName: serviceName,
 	serviceType: 'mail',
 	serviceData: JSON.stringify({ address: process.env.APICORE_EMAIL }),
-};
-
-const browserIDQueryParameters = {
-	browserID: browserID,
 };
 
 const options = {
@@ -132,6 +130,7 @@ function createDynamoDBTables() {
 				{
 					IndexName: 'uno-index',
 					Projection: {
+						ProjectionType: 'INCLUDE',
 						NonKeyAttributes: [
 							'owner',
 							'name',
@@ -161,167 +160,139 @@ function deleteDynamoDBTables() {
 	return Promise.allSettled(alls);
 }
 
-function buildEvent(
-	method: string,
-	path: string,
-	pathParameters: APIGatewayProxyEventPathParameters | null,
-	queryStringParameters: APIGatewayProxyEventQueryStringParameters | null,
-	body: unknown | null,
-) {
-	const event: APIGatewayProxyEvent = {
-		httpMethod: method,
-		body: body ? JSON.stringify(body) : null,
-		headers: {},
-		isBase64Encoded: false,
-		multiValueHeaders: {},
-		multiValueQueryStringParameters: {},
-		path: path,
-		pathParameters: pathParameters,
-		queryStringParameters: queryStringParameters,
-		requestContext: {
-			accountId: '123456789012',
-			apiId: '1234',
-			authorizer: {
-				principalId: process.env.APICORE_USERNAME,
-				username: process.env.APICORE_USERNAME,
-				...authenticationToken,
-			},
-			httpMethod: 'get',
-			identity: {
-				accessKey: '',
-				accountId: '',
-				apiKey: '',
-				apiKeyId: '',
-				caller: '',
-				clientCert: {
-					clientCertPem: '',
-					issuerDN: '',
-					serialNumber: '',
-					subjectDN: '',
-					validity: { notAfter: '', notBefore: '' },
-				},
-				cognitoAuthenticationProvider: '',
-				cognitoAuthenticationType: '',
-				cognitoIdentityId: '',
-				cognitoIdentityPoolId: '',
-				principalOrgId: '',
-				sourceIp: '',
-				user: '',
-				userAgent: '',
-				userArn: '',
-			},
+class TestAfpDeckNotificationCenterHandler extends AfpDeckNotificationCenterHandler {
+
+	buildEvent(
+		method: string,
+		path: string,
+		pathParameters: APIGatewayProxyEventPathParameters | null,
+		queryStringParameters: APIGatewayProxyEventQueryStringParameters | null,
+		body: object | null,
+	) {
+		const event: APIGatewayProxyEvent = {
+			httpMethod: method,
+			body: body ? JSON.stringify(body) : null,
+			headers: {},
+			isBase64Encoded: false,
+			multiValueHeaders: {},
+			multiValueQueryStringParameters: {},
 			path: path,
-			protocol: 'HTTP/1.1',
-			requestId: 'c6af9ac6-7b61-11e6-9a41-93e8deadbeef',
-			requestTimeEpoch: 1428582896000,
-			resourceId: '123456',
-			resourcePath: '/hello',
-			stage: 'dev',
-		},
-		resource: path,
-		stageVariables: {},
-	};
+			pathParameters: pathParameters,
+			queryStringParameters: queryStringParameters,
+			requestContext: {
+				accountId: '123456789012',
+				apiId: '1234',
+				authorizer: {
+					principalId: process.env.APICORE_USERNAME,
+					username: process.env.APICORE_USERNAME,
+					...authenticationToken,
+				},
+				httpMethod: 'get',
+				identity: {
+					accessKey: '',
+					accountId: '',
+					apiKey: '',
+					apiKeyId: '',
+					caller: '',
+					clientCert: {
+						clientCertPem: '',
+						issuerDN: '',
+						serialNumber: '',
+						subjectDN: '',
+						validity: { notAfter: '', notBefore: '' },
+					},
+					cognitoAuthenticationProvider: '',
+					cognitoAuthenticationType: '',
+					cognitoIdentityId: '',
+					cognitoIdentityPoolId: '',
+					principalOrgId: '',
+					sourceIp: '',
+					user: '',
+					userAgent: '',
+					userArn: '',
+				},
+				path: path,
+				protocol: 'HTTP/1.1',
+				requestId: 'c6af9ac6-7b61-11e6-9a41-93e8deadbeef',
+				requestTimeEpoch: 1428582896000,
+				resourceId: '123456',
+				resourcePath: '/hello',
+				stage: 'dev',
+			},
+			resource: path,
+			stageVariables: {},
+		};
 
-	return event;
-}
+		return event;
+	}
 
-async function registerSubscription(handler: AfpDeckNotificationCenterHandler) {
-	const event = buildEvent('POST', `/notification/${serviceName}`, servicePathParameters, serviceDefinition, testSubscription);
-	const result = await handler.handleEvent(event);
+	async processEvent(event: APIGatewayProxyEvent): Promise<CommonResponse> {
+		const result = await this.handleEvent(event);
 
-	console.log(result);
+		console.log(result);
 
-	expect(result.statusCode).toEqual(200);
-}
+		expect(result.statusCode).toEqual(200);
 
-async function listSubscription(handler: AfpDeckNotificationCenterHandler) {
-	const event = buildEvent('GET', '/notification', null, serviceDefinition, null);
-	const result = await handler.handleEvent(event);
+		return JSON.parse(result.body);
+	}
 
-	console.log(result);
+	async testRegisterSubscription(id: string = browserID, name: string = serviceName, subscription: object = testSubscription) {
+		const service = {
+			browserID: id,
+			...serviceDefinition,
+		};
+		
+		return await this.processEvent(this.buildEvent('POST', `/notification/${name}`, servicePathParameters, service, subscription)) as RegisterSubscriptionsResponse;
+	}
 
-	expect(result.statusCode).toEqual(200);
-}
+	async testListSubscription(id: string = browserID) {
+		return await this.processEvent(this.buildEvent('GET', '/notification', null, { browserID: id }, null)) as ListSubscriptionsResponse;
+	}
 
-async function deleteSubscription(handler: AfpDeckNotificationCenterHandler) {
-	const event = buildEvent('DELETE', `/notification/${serviceName}`, servicePathParameters, serviceDefinition, null);
-	const result = await handler.handleEvent(event);
+	async testDeleteSubscription(id: string = browserID, name: string = serviceName) {
+		const service = {
+			browserID: id,
+			...serviceDefinition,
+		};
 
-	console.log(result);
+		return await this.processEvent(this.buildEvent('DELETE', `/notification/${name}`, servicePathParameters, service, null)) as DeleteSubscriptionsResponse;
+	}
 
-	expect(result.statusCode).toEqual(200);
-}
+	async testPushSubscription(name: string = serviceName, pushData: object = testPush) {
+		return await this.processEvent(this.buildEvent('POST', `/push/${name}`, servicePathParameters, serviceDefinition, pushData));
+	}
 
-async function pushSubscription(handler: AfpDeckNotificationCenterHandler) {
-	const event = buildEvent('POST', `/push/${serviceName}`, servicePathParameters, serviceDefinition, testPush);
-	const result = await handler.handleEvent(event);
+	async testStoreWebPushUserKey(id: string = browserID, pushKey: object = testWebPushKey) {
+		return await this.processEvent(this.buildEvent('POST', '/webpush', null, { browserID: id }, pushKey));
+	}
 
-	console.log(result);
+	async testUpdateWebPushUserKey(id: string = browserID, pushKey: object = testWebPushKey) {
+		return await this.processEvent(this.buildEvent('PUT', '/webpush', null, { browserID: id }, pushKey));
+	}
 
-	expect(result.statusCode).toEqual(200);
-}
+	async testGetWebPushUserKey(id: string = browserID) {
+		return await this.processEvent(this.buildEvent('GET', '/webpush', null, { browserID: id }, null)) as WebPushUserKeyResponse;
+	}
 
-async function storeWebPushUserKey(handler: AfpDeckNotificationCenterHandler) {
-	const event = buildEvent('POST', '/webpush', null, browserIDQueryParameters, testWebPushKey);
-	const result = await handler.handleEvent(event);
+	async testDeleteWebPushUserKey(id: string = browserID) {
+		return await this.processEvent(this.buildEvent('DELETE', '/webpush', null, { browserID: id }, null));
+	}
 
-	console.log(result);
+	async testStoreUserPreference(name: string = serviceName, preferences: object = testPrefs) {
+		return await this.processEvent(this.buildEvent('POST', `/preference/${name}`, servicePathParameters, null, preferences));
+	}
 
-	expect(result.statusCode).toEqual(200);
-}
+	async testGetUserPreferences() {
+		return await this.processEvent(this.buildEvent('GET', `/preferences`, null, null, null)) as UserPreferenceResponse;
+	}
 
-async function updateWebPushUserKey(handler: AfpDeckNotificationCenterHandler) {
-	const event = buildEvent('PUT', '/webpush', null, browserIDQueryParameters, testWebPushKey);
-	const result = await handler.handleEvent(event);
+	async testGetUserPreference(name: string = serviceName) {
+		return await this.processEvent(this.buildEvent('GET', `/preference/${name}`, servicePathParameters, null, null)) as UserPreferenceResponse;
+	}
 
-	console.log(result);
-
-	expect(result.statusCode).toEqual(200);
-}
-
-async function getWebPushUserKey(handler: AfpDeckNotificationCenterHandler) {
-	const event = buildEvent('GET', '/webpush', null, browserIDQueryParameters, null);
-	const result = await handler.handleEvent(event);
-
-	console.log(result);
-
-	expect(result.statusCode).toEqual(200);
-}
-
-async function deleteWebPushUserKey(handler: AfpDeckNotificationCenterHandler) {
-	const event = buildEvent('DELETE', '/webpush', null, browserIDQueryParameters, null);
-	const result = await handler.handleEvent(event);
-
-	console.log(result);
-
-	expect(result.statusCode).toEqual(200);
-}
-
-async function storeUserPreferences(handler: AfpDeckNotificationCenterHandler) {
-	const event = buildEvent('POST', `/preferences/${serviceName}`, servicePathParameters, null, testPrefs);
-	const result = await handler.handleEvent(event);
-
-	console.log(result);
-
-	expect(result.statusCode).toEqual(200);
-}
-
-async function getUserPreferences(handler: AfpDeckNotificationCenterHandler) {
-	const event = buildEvent('GET', `/preferences/${serviceName}`, servicePathParameters, null, null);
-	const result = await handler.handleEvent(event);
-
-	console.log(result);
-
-	expect(result.statusCode).toEqual(200);
-}
-
-async function deleteUserPreferences(handler: AfpDeckNotificationCenterHandler) {
-	const event = buildEvent('DELETE', `/preferences/${serviceName}`, servicePathParameters, null, null);
-	const result = await handler.handleEvent(event);
-
-	console.log(result);
-
-	expect(result.statusCode).toEqual(200);
+	async testDeleteUserPreference(name: string = serviceName) {
+		return await this.processEvent(this.buildEvent('DELETE', `/preference/${name}`, servicePathParameters, null, null));
+	}
 }
 
 expect(process.env.APICORE_TEST_URL).toBeDefined();
@@ -334,14 +305,14 @@ expect(process.env.APICORE_PUSH_USERNAME).toBeDefined();
 expect(process.env.APICORE_PUSH_PASSWORD).toBeDefined();
 
 describe('Unit test for api with DynamoDB', function () {
-	let handler: AfpDeckNotificationCenterHandler;
+	let handler: TestAfpDeckNotificationCenterHandler;
 
 	beforeAll((done) => {
 		console.log('Will authenticate');
 
 		database(false, process.env.MONGODB_URL, userPrefrencesTableName, webPushTableName, subscriptionsTableName)
 			.then((db) => {
-				handler = new AfpDeckNotificationCenterHandler(db, options);
+				handler = new TestAfpDeckNotificationCenterHandler(db, options);
 
 				apicore
 					.authenticate({
@@ -355,13 +326,13 @@ describe('Unit test for api with DynamoDB', function () {
 
 						createDynamoDBTables()
 							.then((values) => {
-								values.forEach((v) => {
-									let reason;
-
+								for (const v of values) {
 									if (v.status === 'rejected') {
 										console.error(v.reason);
+										done(new Error(v.reason));
+										return;
 									}
-								});
+								}
 
 								console.log('Did create dynamodb tables');
 								done();
@@ -399,15 +370,43 @@ describe('Unit test for api with DynamoDB', function () {
 	it(
 		'verifies successful register subscription with DynamoDB',
 		async () => {
-			await registerSubscription(handler);
+			await handler.testRegisterSubscription();
 		},
 		DEFAULT_TIMEOUT,
 	);
 
 	it(
-		'verifies successful list subscriptions with DynamoDB',
+		'verifies successful register subscription another browserid with DynamoDB',
 		async () => {
-			await listSubscription(handler);
+			await handler.testRegisterSubscription(altBrowserID);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful register another subscription another browserid with DynamoDB',
+		async () => {
+			await handler.testRegisterSubscription(altBrowserID, `${serviceName}-another`);
+		},
+		DEFAULT_TIMEOUT,
+	);
+	
+	it(
+		'verifies successful list all subscriptions with DynamoDB',
+		async () => {
+			const result = await handler.testListSubscription(ALL);
+
+			expect(result.response.subscriptions?.length).toEqual(2);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful list subscriptions another browser with DynamoDB',
+		async () => {
+			const result = await handler.testListSubscription(altBrowserID);
+
+			expect(result.response.subscriptions?.length).toEqual(1);
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -415,15 +414,35 @@ describe('Unit test for api with DynamoDB', function () {
 	it(
 		'verifies successful push subscription with DynamoDB',
 		async () => {
-			await pushSubscription(handler);
+			const result = await handler.testPushSubscription();
+
+			console.log(result);
 		},
 		DEFAULT_TIMEOUT,
 	);
 
 	it(
-		'verifies successful delete subscription with DynamoDB',
+		'verifies successful delete one subscription another browser with DynamoDB',
 		async () => {
-			await deleteSubscription(handler);
+			await handler.testDeleteSubscription(altBrowserID, `${serviceName}-another`);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful delete all subscription with DynamoDB',
+		async () => {
+			await handler.testDeleteSubscription(ALL);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful list all subscriptions after delete with DynamoDB',
+		async () => {
+			const result = await handler.testListSubscription(ALL);
+
+			expect(result.response.subscriptions ? result.response.subscriptions.length : 0).toEqual(0);
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -431,7 +450,7 @@ describe('Unit test for api with DynamoDB', function () {
 	it(
 		'verifies successful store webpush keys with DynamoDB',
 		async () => {
-			await storeWebPushUserKey(handler);
+			await handler.testStoreWebPushUserKey();
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -439,7 +458,7 @@ describe('Unit test for api with DynamoDB', function () {
 	it(
 		'verifies successful get webpush keys with DynamoDB',
 		async () => {
-			await getWebPushUserKey(handler);
+			await handler.testGetWebPushUserKey();
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -447,7 +466,7 @@ describe('Unit test for api with DynamoDB', function () {
 	it(
 		'verifies successful update webpush keys with DynamoDB',
 		async () => {
-			await updateWebPushUserKey(handler);
+			await handler.testUpdateWebPushUserKey();
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -456,7 +475,7 @@ describe('Unit test for api with DynamoDB', function () {
 	it(
 		'verifies successful delete webpush keys with DynamoDB',
 		async () => {
-			await deleteWebPushUserKey(handler);
+			await handler.testDeleteWebPushUserKey();
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -464,7 +483,7 @@ describe('Unit test for api with DynamoDB', function () {
 	it(
 		'verifies successful store user preferences with DynamoDB',
 		async () => {
-			await storeUserPreferences(handler);
+			await handler.testStoreUserPreference();
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -472,7 +491,7 @@ describe('Unit test for api with DynamoDB', function () {
 	it(
 		'verifies successful get user preferences with DynamoDB',
 		async () => {
-			await getUserPreferences(handler);
+			await handler.testGetUserPreference();
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -480,19 +499,19 @@ describe('Unit test for api with DynamoDB', function () {
 	it(
 		'verifies successful delete user preferences with DynamoDB',
 		async () => {
-			await deleteUserPreferences(handler);
+			await handler.testDeleteUserPreference();
 		},
 		DEFAULT_TIMEOUT,
 	);
 });
 
 describe('Unit test for api with MongoDB', function () {
-	let handler: AfpDeckNotificationCenterHandler;
+	let handler: TestAfpDeckNotificationCenterHandler;
 
 	beforeAll((done) => {
 		database(true, process.env.MONGODB_URL, userPrefrencesTableName, webPushTableName, subscriptionsTableName)
 			.then((db) => {
-				handler = new AfpDeckNotificationCenterHandler(db, options);
+				handler = new TestAfpDeckNotificationCenterHandler(db, options);
 
 				apicore
 					.authenticate({
@@ -527,15 +546,35 @@ describe('Unit test for api with MongoDB', function () {
 	it(
 		'verifies successful register subscription with MongoDB',
 		async () => {
-			await registerSubscription(handler);
+			await handler.testRegisterSubscription();
 		},
 		DEFAULT_TIMEOUT,
 	);
 
 	it(
-		'verifies successful list subscriptions with MongoDB',
+		'verifies successful register another subscription another browserid with MongoDB',
 		async () => {
-			return listSubscription(handler);
+			await handler.testRegisterSubscription(altBrowserID, `${serviceName}-another`);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful list all subscriptions with MongoDB',
+		async () => {
+			const result = await handler.testListSubscription(ALL);
+
+			expect(result.response.subscriptions?.length).toEqual(2);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful list subscriptions another browser with MongoDB',
+		async () => {
+			const result = await handler.testListSubscription(altBrowserID);
+
+			expect(result.response.subscriptions?.length).toEqual(1);
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -543,15 +582,33 @@ describe('Unit test for api with MongoDB', function () {
 	it(
 		'verifies successful push subscription with MongoDB',
 		async () => {
-			await pushSubscription(handler);
+			await handler.testPushSubscription();
 		},
 		DEFAULT_TIMEOUT,
 	);
 
 	it(
-		'verifies successful delete subscription with MongoDB',
+		'verifies successful delete one subscription another browser with MongoDB',
 		async () => {
-			await deleteSubscription(handler);
+			await handler.testDeleteSubscription(altBrowserID, `${serviceName}-another`);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful delete all subscription with MongoDB',
+		async () => {
+			await handler.testDeleteSubscription(ALL);
+		},
+		DEFAULT_TIMEOUT,
+	);
+
+	it(
+		'verifies successful list all subscriptions after delete with MongoDB',
+		async () => {
+			const result = await handler.testListSubscription(ALL);
+
+			expect(result.response.subscriptions ? result.response.subscriptions.length : 0).toEqual(0);
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -559,7 +616,7 @@ describe('Unit test for api with MongoDB', function () {
 	it(
 		'verifies successful store webpush keys with MongoDB',
 		async () => {
-			await storeWebPushUserKey(handler);
+			await handler.testStoreWebPushUserKey();
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -567,7 +624,7 @@ describe('Unit test for api with MongoDB', function () {
 	it(
 		'verifies successful get webpush keys with MongoDB',
 		async () => {
-			await getWebPushUserKey(handler);
+			await handler.testGetWebPushUserKey();
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -575,7 +632,7 @@ describe('Unit test for api with MongoDB', function () {
 	it(
 		'verifies successful update webpush keys with MongoDB',
 		async () => {
-			await updateWebPushUserKey(handler);
+			await handler.testUpdateWebPushUserKey();
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -583,7 +640,7 @@ describe('Unit test for api with MongoDB', function () {
 	it(
 		'verifies successful delete webpush keys with MongoDB',
 		async () => {
-			await deleteWebPushUserKey(handler);
+			await handler.testDeleteWebPushUserKey();
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -591,7 +648,7 @@ describe('Unit test for api with MongoDB', function () {
 	it(
 		'verifies successful store user preferences with MongoDB',
 		async () => {
-			await storeUserPreferences(handler);
+			await handler.testStoreUserPreference();
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -599,7 +656,7 @@ describe('Unit test for api with MongoDB', function () {
 	it(
 		'verifies successful get user preferences with MongoDB',
 		async () => {
-			await getUserPreferences(handler);
+			await handler.testGetUserPreference();
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -607,7 +664,7 @@ describe('Unit test for api with MongoDB', function () {
 	it(
 		'verifies successful delete user preferences with MongoDB',
 		async () => {
-			await deleteUserPreferences(handler);
+			await handler.testDeleteUserPreference();
 		},
 		DEFAULT_TIMEOUT,
 	);

@@ -464,19 +464,25 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref AfpDeckNotificationCenterApi
-            Path: /preferences/{identifier}
+            Path: /preferences
             Method: GET
-        StoreUserPreferences:
+        GetUserPreference:
           Type: Api
           Properties:
             RestApiId: !Ref AfpDeckNotificationCenterApi
-            Path: /preferences/{identifier}
+            Path: /preference/{identifier}
+            Method: GET
+        StoreUserPreference:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AfpDeckNotificationCenterApi
+            Path: /preference/{identifier}
             Method: POST
-        DeleteUserPreferences:
+        DeleteUserPreference:
           Type: Api
           Properties:
             RestApiId: !Ref AfpDeckNotificationCenterApi
-            Path: /preferences/{identifier}
+            Path: /preference/{identifier}
             Method: DELETE
       Environment:
         Variables:

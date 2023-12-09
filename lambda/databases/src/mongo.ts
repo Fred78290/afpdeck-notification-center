@@ -1,7 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import mongoose, { ConnectOptions } from 'mongoose';
 import url from 'url';
-import { ALL, AccessStorage, UserPreferencesDocument, WebPushUserDocument, SubscriptionDocument, DeletedSubscriptionRemainder } from '../index';
+import {
+    ALL,
+    AccessStorage,
+    UserPreferencesDocument,
+    WebPushUserDocument,
+    SubscriptionDocument,
+    DeletedSubscriptionRemainder,
+    DatabaseError,
+    ERROR_RESOURCE_NOTFOUND,
+    ERROR_DATABASE_NOTCONNECTED,
+} from '../index';
 
 interface SubscriptionByBrowser {
     name: string;
@@ -156,34 +166,60 @@ export class MongoDBAccessStorage implements AccessStorage {
                         reject(e);
                     });
             } else {
-                reject(new Error('Not connected'));
+                reject(new DatabaseError(500, ERROR_DATABASE_NOTCONNECTED));
             }
         });
     }
 
-    public getUserPreferences(principalId: string, name: string): Promise<UserPreferencesDocument[]> {
-        return new Promise<UserPreferencesDocument[]>((resolve, reject) => {
+    public getUserPreferences(principalId: string): Promise<UserPreferencesDocument[] | null> {
+        return new Promise<UserPreferencesDocument[] | null>((resolve, reject) => {
             if (this.userPreferencesModel) {
                 this.userPreferencesModel
                     .find(
-                        name === ALL
-                            ? {
-                                  owner: principalId,
-                              }
-                            : {
-                                  owner: principalId,
-                                  name: name,
-                              },
+                        {
+                            owner: principalId,
+                        },
+                        {
+                            _id: 0,
+                            __v: 0,
+                        },
                     )
                     .exec()
-                    .then((results) => {
-                        resolve(results);
+                    .then((found) => {
+                        resolve(found);
                     })
                     .catch((e) => {
                         reject(e);
                     });
             } else {
-                reject(new Error('Not connected'));
+                reject(new DatabaseError(500, ERROR_DATABASE_NOTCONNECTED));
+            }
+        });
+    }
+
+    public getUserPreference(principalId: string, name: string): Promise<UserPreferencesDocument | null> {
+        return new Promise<UserPreferencesDocument | null>((resolve, reject) => {
+            if (this.userPreferencesModel) {
+                this.userPreferencesModel
+                    .findOne(
+                        {
+                            owner: principalId,
+                            name: name,
+                        },
+                        {
+                            _id: 0,
+                            __v: 0,
+                        },
+                    )
+                    .exec()
+                    .then((found) => {
+                        resolve(found);
+                    })
+                    .catch((e) => {
+                        reject(e);
+                    });
+            } else {
+                reject(new DatabaseError(500, ERROR_DATABASE_NOTCONNECTED));
             }
         });
     }
@@ -207,14 +243,14 @@ export class MongoDBAccessStorage implements AccessStorage {
                         if (result.acknowledged) {
                             resolve();
                         } else {
-                            reject(new Error('Not found'));
+                            reject(new DatabaseError(404, ERROR_RESOURCE_NOTFOUND));
                         }
                     })
                     .catch((e: any) => {
                         reject(e);
                     });
             } else {
-                reject(new Error('Not connected'));
+                reject(new DatabaseError(500, ERROR_DATABASE_NOTCONNECTED));
             }
         });
     }
@@ -232,16 +268,20 @@ export class MongoDBAccessStorage implements AccessStorage {
                       };
 
                 this.webPushUserModel
-                    .find(filter)
+                    .find(filter, { _id: 0, __v: 0 })
                     .exec()
                     .then((results) => {
-                        resolve(results);
+                        if (results) {
+                            resolve(results);
+                        } else {
+                            resolve([]);
+                        }
                     })
                     .catch((e) => {
                         reject(e);
                     });
             } else {
-                reject(new Error('Not connected'));
+                reject(new DatabaseError(500, ERROR_DATABASE_NOTCONNECTED));
             }
         });
     }
@@ -259,7 +299,7 @@ export class MongoDBAccessStorage implements AccessStorage {
                         reject(e);
                     });
             } else {
-                reject(new Error('Not connected'));
+                reject(new DatabaseError(500, ERROR_DATABASE_NOTCONNECTED));
             }
         });
     }
@@ -290,7 +330,7 @@ export class MongoDBAccessStorage implements AccessStorage {
                         reject(e);
                     });
             } else {
-                reject(new Error('Not connected'));
+                reject(new DatabaseError(500, ERROR_DATABASE_NOTCONNECTED));
             }
         });
     }
@@ -317,7 +357,7 @@ export class MongoDBAccessStorage implements AccessStorage {
                         reject(e);
                     });
             } else {
-                reject(new Error('Not connected'));
+                reject(new DatabaseError(500, ERROR_DATABASE_NOTCONNECTED));
             }
         });
     }
@@ -326,9 +366,15 @@ export class MongoDBAccessStorage implements AccessStorage {
         return new Promise<SubscriptionDocument[]>((resolve, reject) => {
             if (this.subscriptionModel) {
                 this.subscriptionModel
-                    .find({
-                        owner: owner,
-                    })
+                    .find(
+                        {
+                            owner: owner,
+                        },
+                        {
+                            _id: 0,
+                            __v: 0,
+                        },
+                    )
                     .exec()
                     .then((results) => {
                         resolve(results);
@@ -337,7 +383,7 @@ export class MongoDBAccessStorage implements AccessStorage {
                         reject(e);
                     });
             } else {
-                reject(new Error('Not connected'));
+                reject(new DatabaseError(500, ERROR_DATABASE_NOTCONNECTED));
             }
         });
     }
@@ -346,23 +392,25 @@ export class MongoDBAccessStorage implements AccessStorage {
         return new Promise<SubscriptionDocument | null>((resolve, reject) => {
             if (this.subscriptionModel) {
                 this.subscriptionModel
-                    .findOne({
-                        owner: owner,
-                        name: name,
-                    })
+                    .findOne(
+                        {
+                            owner: owner,
+                            name: name,
+                        },
+                        {
+                            _id: 0,
+                            __v: 0,
+                        },
+                    )
                     .exec()
-                    .then((results) => {
-                        if (results) {
-                            resolve(results);
-                        } else {
-                            reject(new Error('Requested resource not found'));
-                        }
+                    .then((item) => {
+                        resolve(item);
                     })
                     .catch((e) => {
                         reject(e);
                     });
             } else {
-                reject(new Error('Not connected'));
+                reject(new DatabaseError(500, ERROR_DATABASE_NOTCONNECTED));
             }
         });
     }
@@ -378,34 +426,40 @@ export class MongoDBAccessStorage implements AccessStorage {
                     .exec()
                     .then((item) => {
                         if (this.subscriptionModel) {
+                            let saveIt = false;
+
                             if (item) {
                                 const browserIDs = item.browserID;
 
-                                browserIDs.forEach((id) => {
-                                    if (!subscription.browserID.includes(id)) {
-                                        subscription.browserID.push(id);
+                                for (const id of subscription.browserID) {
+                                    if (!browserIDs.includes(id)) {
+                                        browserIDs.push(id);
+                                        saveIt = true;
                                     }
-                                });
+                                }
+                            } else {
+                                item = new this.subscriptionModel(subscription);
+                                saveIt = true;
                             }
 
-                            const doc = new this.subscriptionModel(subscription);
-
-                            doc.isNew = item === null || item === undefined;
-
-                            doc.save()
-                                .then(() => {
-                                    resolve();
-                                })
-                                .catch((e: any) => {
-                                    reject(e);
-                                });
+                            if (saveIt) {
+                                item.save()
+                                    .then(() => {
+                                        resolve();
+                                    })
+                                    .catch((e: any) => {
+                                        reject(e);
+                                    });
+                            } else {
+                                resolve();
+                            }
                         }
                     })
                     .catch((e) => {
                         reject(e);
                     });
             } else {
-                reject(new Error('Not connected'));
+                reject(new DatabaseError(500, ERROR_DATABASE_NOTCONNECTED));
             }
         });
     }
@@ -419,22 +473,16 @@ export class MongoDBAccessStorage implements AccessStorage {
                         name: name,
                     })
                     .exec()
-                    .then((found) => {
-                        const remains: DeletedSubscriptionRemainder = {
-                            identifier: name,
-                        };
+                    .then((item) => {
+                        if (item && this.subscriptionModel) {
+                            item.browserID = item.browserID.filter((value) => value !== browserID);
 
-                        if (found && this.subscriptionModel) {
-                            found.browserID = found.browserID.filter((value) => value !== browserID);
-
-                            if (found.browserID.length > 0) {
-                                const doc = new this.subscriptionModel(found);
-
-                                doc.updateOne()
+                            if (item.browserID.length > 0) {
+                                item.updateOne()
                                     .then(() => {
                                         resolve({
                                             identifier: name,
-                                            remains: found.browserID,
+                                            remains: item.browserID,
                                         });
                                     })
                                     .catch((e: any) => {
@@ -450,21 +498,22 @@ export class MongoDBAccessStorage implements AccessStorage {
                                     .then(() => {
                                         resolve({
                                             identifier: name,
+                                            remains: [],
                                         });
                                     })
                                     .catch((e) => {
                                         reject(e);
                                     });
                             }
+                        } else {
+                            reject(new DatabaseError(404, ERROR_DATABASE_NOTCONNECTED));
                         }
-
-                        resolve(remains);
                     })
                     .catch((e: any) => {
                         reject(e);
                     });
             } else {
-                reject(new Error('Not connected'));
+                reject(new DatabaseError(500, ERROR_DATABASE_NOTCONNECTED));
             }
         });
     }

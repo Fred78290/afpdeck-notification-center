@@ -6,17 +6,32 @@ import { MongoDBAccessStorage } from './src/mongo';
 
 export const ALL = 'all';
 
-const DEFAULT_WEBPUSH_TABLENAME = 'afpdeck-webpush';
-const DEFAULT_SUBSCRIPTIONS_TABLENAME = 'afpdeck-subscriptions';
-const DEFAULT_BROWSERID_TABLENAME = 'afpdeck-browserid';
-const DEFAULT_USERPREFS_TABLENAME = 'afpdeck-preferences';
+export const DEFAULT_WEBPUSH_TABLENAME = 'afpdeck-webpush';
+export const DEFAULT_SUBSCRIPTIONS_TABLENAME = 'afpdeck-subscriptions';
+export const DEFAULT_BROWSERID_TABLENAME = 'afpdeck-browserid';
+export const DEFAULT_USERPREFS_TABLENAME = 'afpdeck-preferences';
+export const ERROR_RESOURCE_NOTFOUND = 'Requested resource not found';
+export const ERROR_DATABASE_NOTCONNECTED = 'Database not connected';
 
-export interface UserPreferences {
+export class DatabaseError extends Error {
+    private _code: number;
+
+    constructor(code: number, reason: string) {
+        super(reason);
+        this._code = code;
+    }
+
+    get code() {
+        return this._code;
+    }
+}
+
+export interface UserPreference {
     name: string;
     preferences: unknown;
 }
 
-export interface UserPreferencesDocument extends UserPreferences {
+export interface UserPreferencesDocument extends UserPreference {
     owner: string;
     name: string;
     preferences: unknown;
@@ -44,7 +59,7 @@ export interface WebPushUserDocument {
 
 export interface DeletedSubscriptionRemainder {
     identifier: string;
-    remains?: string[];
+    remains: string[];
 }
 
 export interface AccessStorage {
@@ -52,7 +67,8 @@ export interface AccessStorage {
     disconnect(): Promise<void>;
 
     storeUserPreferences(document: UserPreferencesDocument): Promise<void>;
-    getUserPreferences(principalId: string, name: string): Promise<UserPreferencesDocument[]>;
+    getUserPreference(principalId: string, name: string): Promise<UserPreferencesDocument | null>;
+    getUserPreferences(principalId: string): Promise<UserPreferencesDocument[] | null>;
     deleteUserPreferences(principalId: string, name: string): Promise<void>;
 
     findPushKeyForIdentity(principalId: string, browserID: string[]): Promise<WebPushUserDocument[]>;
