@@ -43,7 +43,7 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
                 options: [
                     '--username=<username>',
                     '--password=<password>',
-                    '--browser-identifier=<browser-id>'
+                    '--visitor-id=<browser-id>'
                 ]
             },
             store: {
@@ -51,7 +51,7 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
                 options: [
                     '--username=<username>',
                     '--password=<password>',
-                    '--browser-identifier=<browser-id>',
+                    '--visitor-id=<browser-id>',
                     '--endpoint=<url>',
                     '--key=<browser key>]',
                     '--auth=<auth secret>',
@@ -66,7 +66,7 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
                 options: [
                     '--username=<username>',
                     '--password=<password>',
-                    '--browser-identifier=<browser-id>'
+                    '--visitor-id=<browser-id>'
                 ]
             }
         },

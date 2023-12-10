@@ -16,8 +16,8 @@ const DEFAULT_TIMEOUT = 30000;
 
 dotenv.config({ path: __dirname + '/../../configs/.env' });
 
-const browserID = 'B46FBAE9-C6A7-4FFC-AB72-C59D30613B49';
-const altBrowserID = '5A5DBDB3-3F38-4844-8EA8-7E14BE9AFED6';
+const visitorID = 'B46FBAE9-C6A7-4FFC-AB72-C59D30613B49';
+const altVisitorID = '5A5DBDB3-3F38-4844-8EA8-7E14BE9AFED6';
 const webPushTableName = 'test-afpdeck-webpush';
 const subscriptionsTableName = 'test-afpdeck-subscriptions';
 const userPrefrencesTableName = 'test-afpdeck-preferences';
@@ -106,11 +106,11 @@ function createDynamoDBTables() {
 			BillingMode: 'PAY_PER_REQUEST',
 			KeySchema: [
 				{ AttributeName: 'owner', KeyType: 'HASH' },
-				{ AttributeName: 'browserID', KeyType: 'RANGE' },
+				{ AttributeName: 'visitorID', KeyType: 'RANGE' },
 			],
 			AttributeDefinitions: [
 				{ AttributeName: 'owner', AttributeType: 'S' },
-				{ AttributeName: 'browserID', AttributeType: 'S' },
+				{ AttributeName: 'visitorID', AttributeType: 'S' },
 			],
 		},
 		{
@@ -236,22 +236,22 @@ class TestAfpDeckNotificationCenterHandler extends AfpDeckNotificationCenterHand
 		return JSON.parse(result.body);
 	}
 
-	async testRegisterSubscription(id: string = browserID, name: string = serviceName, subscription: object = testSubscription) {
+	async testRegisterSubscription(id: string = visitorID, name: string = serviceName, subscription: object = testSubscription) {
 		const service = {
-			browserID: id,
+			visitorID: id,
 			...serviceDefinition,
 		};
 		
 		return await this.processEvent(this.buildEvent('POST', `/notification/${name}`, servicePathParameters, service, subscription)) as RegisterSubscriptionsResponse;
 	}
 
-	async testListSubscription(id: string = browserID) {
-		return await this.processEvent(this.buildEvent('GET', '/notification', null, { browserID: id }, null)) as ListSubscriptionsResponse;
+	async testListSubscription(id: string = visitorID) {
+		return await this.processEvent(this.buildEvent('GET', '/notification', null, { visitorID: id }, null)) as ListSubscriptionsResponse;
 	}
 
-	async testDeleteSubscription(id: string = browserID, name: string = serviceName) {
+	async testDeleteSubscription(id: string = visitorID, name: string = serviceName) {
 		const service = {
-			browserID: id,
+			visitorID: id,
 			...serviceDefinition,
 		};
 
@@ -262,20 +262,20 @@ class TestAfpDeckNotificationCenterHandler extends AfpDeckNotificationCenterHand
 		return await this.processEvent(this.buildEvent('POST', `/push/${name}`, servicePathParameters, serviceDefinition, pushData));
 	}
 
-	async testStoreWebPushUserKey(id: string = browserID, pushKey: object = testWebPushKey) {
-		return await this.processEvent(this.buildEvent('POST', '/webpush', null, { browserID: id }, pushKey));
+	async testStoreWebPushUserKey(id: string = visitorID, pushKey: object = testWebPushKey) {
+		return await this.processEvent(this.buildEvent('POST', '/webpush', null, { visitorID: id }, pushKey));
 	}
 
-	async testUpdateWebPushUserKey(id: string = browserID, pushKey: object = testWebPushKey) {
-		return await this.processEvent(this.buildEvent('PUT', '/webpush', null, { browserID: id }, pushKey));
+	async testUpdateWebPushUserKey(id: string = visitorID, pushKey: object = testWebPushKey) {
+		return await this.processEvent(this.buildEvent('PUT', '/webpush', null, { visitorID: id }, pushKey));
 	}
 
-	async testGetWebPushUserKey(id: string = browserID) {
-		return await this.processEvent(this.buildEvent('GET', '/webpush', null, { browserID: id }, null)) as WebPushUserKeyResponse;
+	async testGetWebPushUserKey(id: string = visitorID) {
+		return await this.processEvent(this.buildEvent('GET', '/webpush', null, { visitorID: id }, null)) as WebPushUserKeyResponse;
 	}
 
-	async testDeleteWebPushUserKey(id: string = browserID) {
-		return await this.processEvent(this.buildEvent('DELETE', '/webpush', null, { browserID: id }, null));
+	async testDeleteWebPushUserKey(id: string = visitorID) {
+		return await this.processEvent(this.buildEvent('DELETE', '/webpush', null, { visitorID: id }, null));
 	}
 
 	async testStoreUserPreference(name: string = serviceName, preferences: object = testPrefs) {
@@ -376,17 +376,17 @@ describe('Unit test for api with DynamoDB', function () {
 	);
 
 	it(
-		'verifies successful register subscription another browserid with DynamoDB',
+		'verifies successful register subscription another visitor-id with DynamoDB',
 		async () => {
-			await handler.testRegisterSubscription(altBrowserID);
+			await handler.testRegisterSubscription(altVisitorID);
 		},
 		DEFAULT_TIMEOUT,
 	);
 
 	it(
-		'verifies successful register another subscription another browserid with DynamoDB',
+		'verifies successful register another subscription another visitor-id with DynamoDB',
 		async () => {
-			await handler.testRegisterSubscription(altBrowserID, `${serviceName}-another`);
+			await handler.testRegisterSubscription(altVisitorID, `${serviceName}-another`);
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -404,7 +404,7 @@ describe('Unit test for api with DynamoDB', function () {
 	it(
 		'verifies successful list subscriptions another browser with DynamoDB',
 		async () => {
-			const result = await handler.testListSubscription(altBrowserID);
+			const result = await handler.testListSubscription(altVisitorID);
 
 			expect(result.response.subscriptions?.length).toEqual(1);
 		},
@@ -424,7 +424,7 @@ describe('Unit test for api with DynamoDB', function () {
 	it(
 		'verifies successful delete one subscription another browser with DynamoDB',
 		async () => {
-			await handler.testDeleteSubscription(altBrowserID, `${serviceName}-another`);
+			await handler.testDeleteSubscription(altVisitorID, `${serviceName}-another`);
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -552,9 +552,9 @@ describe('Unit test for api with MongoDB', function () {
 	);
 
 	it(
-		'verifies successful register another subscription another browserid with MongoDB',
+		'verifies successful register another subscription another visitor-id with MongoDB',
 		async () => {
-			await handler.testRegisterSubscription(altBrowserID, `${serviceName}-another`);
+			await handler.testRegisterSubscription(altVisitorID, `${serviceName}-another`);
 		},
 		DEFAULT_TIMEOUT,
 	);
@@ -572,7 +572,7 @@ describe('Unit test for api with MongoDB', function () {
 	it(
 		'verifies successful list subscriptions another browser with MongoDB',
 		async () => {
-			const result = await handler.testListSubscription(altBrowserID);
+			const result = await handler.testListSubscription(altVisitorID);
 
 			expect(result.response.subscriptions?.length).toEqual(1);
 		},
@@ -590,7 +590,7 @@ describe('Unit test for api with MongoDB', function () {
 	it(
 		'verifies successful delete one subscription another browser with MongoDB',
 		async () => {
-			await handler.testDeleteSubscription(altBrowserID, `${serviceName}-another`);
+			await handler.testDeleteSubscription(altVisitorID, `${serviceName}-another`);
 		},
 		DEFAULT_TIMEOUT,
 	);

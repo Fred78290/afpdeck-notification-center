@@ -16,7 +16,7 @@ import {
 interface SubscriptionByBrowser {
     name: string;
     owner: string;
-    browserID: string;
+    visitorID: string;
 }
 
 const UserPreferencesSchema = new mongoose.Schema<UserPreferencesDocument>({
@@ -30,7 +30,7 @@ const SubscriptionSchema = new mongoose.Schema<SubscriptionDocument>({
     name: { type: String, required: true, index: true },
     owner: { type: String, required: true, index: true },
     uno: { type: String, required: true },
-    browserID: { type: [String], required: true },
+    visitorID: { type: [String], required: true },
     updated: { type: Date, required: true },
     created: { type: Date, required: true },
     subscription: {
@@ -53,7 +53,7 @@ const SubscriptionSchema = new mongoose.Schema<SubscriptionDocument>({
 
 const WebPushUserSchema = new mongoose.Schema<WebPushUserDocument>({
     owner: { type: String, required: true, index: true },
-    browserID: { type: String, required: true, index: true },
+    visitorID: { type: String, required: true, index: true },
     updated: { type: Date, required: true },
     created: { type: Date, required: true },
     apiKeys: {
@@ -255,16 +255,16 @@ export class MongoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public findPushKeyForIdentity(principalId: string, browserID: string[]): Promise<WebPushUserDocument[]> {
+    public findPushKeyForIdentity(principalId: string, visitorID: string[]): Promise<WebPushUserDocument[]> {
         return new Promise<WebPushUserDocument[]>((resolve, reject) => {
             if (this.webPushUserModel) {
-                const filter = browserID.includes(ALL)
+                const filter = visitorID.includes(ALL)
                     ? {
                           owner: principalId,
                       }
                     : {
                           owner: principalId,
-                          browserID: browserID,
+                          visitorID: visitorID,
                       };
 
                 this.webPushUserModel
@@ -311,7 +311,7 @@ export class MongoDBAccessStorage implements AccessStorage {
                     .findOneAndUpdate(
                         {
                             owner: document.owner,
-                            browserID: document.browserID,
+                            visitorID: document.visitorID,
                         },
                         {
                             apiKeys: document.apiKeys,
@@ -335,18 +335,18 @@ export class MongoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public deleteWebPushUserDocument(principalId: string, browserID: string): Promise<void> {
+    public deleteWebPushUserDocument(principalId: string, visitorID: string): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             if (this.webPushUserModel) {
                 this.webPushUserModel
                     .deleteMany(
-                        browserID === ALL
+                        visitorID === ALL
                             ? {
                                   owner: principalId,
                               }
                             : {
                                   owner: principalId,
-                                  browserID: browserID,
+                                  visitorID: visitorID,
                               },
                     )
                     .exec()
@@ -429,11 +429,11 @@ export class MongoDBAccessStorage implements AccessStorage {
                             let saveIt = false;
 
                             if (item) {
-                                const browserIDs = item.browserID;
+                                const visitorIDs = item.visitorID;
 
-                                for (const id of subscription.browserID) {
-                                    if (!browserIDs.includes(id)) {
-                                        browserIDs.push(id);
+                                for (const id of subscription.visitorID) {
+                                    if (!visitorIDs.includes(id)) {
+                                        visitorIDs.push(id);
                                         saveIt = true;
                                     }
                                 }
@@ -464,7 +464,7 @@ export class MongoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public deleteSubscription(owner: string, name: string, browserID: string): Promise<DeletedSubscriptionRemainder> {
+    public deleteSubscription(owner: string, name: string, visitorID: string): Promise<DeletedSubscriptionRemainder> {
         return new Promise<DeletedSubscriptionRemainder>((resolve, reject) => {
             if (this.subscriptionModel) {
                 this.subscriptionModel
@@ -475,14 +475,14 @@ export class MongoDBAccessStorage implements AccessStorage {
                     .exec()
                     .then((item) => {
                         if (item && this.subscriptionModel) {
-                            item.browserID = item.browserID.filter((value) => value !== browserID);
+                            item.visitorID = item.visitorID.filter((value) => value !== visitorID);
 
-                            if (item.browserID.length > 0) {
+                            if (item.visitorID.length > 0) {
                                 item.updateOne()
                                     .then(() => {
                                         resolve({
                                             identifier: name,
-                                            remains: item.browserID,
+                                            remains: item.visitorID,
                                         });
                                     })
                                     .catch((e: any) => {

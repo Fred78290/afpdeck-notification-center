@@ -244,7 +244,7 @@ Resources:
           AttributeType: S
         - AttributeName: uno
           AttributeType: S
-        - AttributeName: browserID
+        - AttributeName: visitorID
           AttributeType: SS
         - AttributeName: created
           AttributeType: N
@@ -265,9 +265,9 @@ Resources:
             NonKeyAttributes:
               - subscription
               - updated
-        - IndexName: browserID-index
+        - IndexName: visitorID-index
           KeySchema:
-            - AttributeName: browserID
+            - AttributeName: visitorID
               KeyType: HASH
             - AttributeName: created
               KeyType: RANGE
@@ -288,19 +288,19 @@ Resources:
       AttributeDefinitions:
         - AttributeName: owner
           AttributeType: S
-        - AttributeName: browserID
+        - AttributeName: visitorID
           AttributeType: S
         - AttributeName: created
           AttributeType: N
       KeySchema:
         - AttributeName: owner
           KeyType: HASH
-        - AttributeName: browserID
+        - AttributeName: visitorID
           KeyType: RANGE
       GlobalSecondaryIndexes:
-        - IndexName: browserID-index
+        - IndexName: visitorID-index
           KeySchema:
-            - AttributeName: browserID
+            - AttributeName: visitorID
               KeyType: HASH
             - AttributeName: created
               KeyType: RANGE

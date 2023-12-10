@@ -14,7 +14,7 @@ const AFPDECK_NOTIFICATION_URL = `http://localhost:${LISTEN_PORT}`
 
 const serviceName = 'test-afpdeck-notification-center-sdk'
 const subscriptionName = 'test-afpdeck-notification-center-sdk'
-const browserID = 'B8D59E4D-9C7E-487F-9333-D139739E07F2'
+const visitorID = 'B8D59E4D-9C7E-487F-9333-D139739E07F2'
 const webPushTableName = 'test-afpdeck-webpush'
 const subscriptionsTableName = 'test-afpdeck-subscriptions'
 const userPrefrencesTableName = 'test-afpdeck-preferences'
@@ -63,7 +63,7 @@ const afpdeck = new AfpDeckNotificationCenter({
     clientId: process.env.APICORE_CLIENT_ID,
     clientSecret: process.env.APICORE_CLIENT_SECRET,
     notificationCenterUrl: AFPDECK_NOTIFICATION_URL,
-    browserID: browserID,
+    visitorID: visitorID,
     saveToken: (token: Token | null) => {
         console.log(token)
     }
