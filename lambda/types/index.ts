@@ -69,3 +69,30 @@ export interface WebPushUserKeyResponse extends CommonResponse {
         };
     };
 }
+
+export interface WebPushNoticationData {
+    name: string;
+    uno: string;
+    isFree: boolean;
+    title: string | undefined;
+    text: string | undefined;
+    headline: string | undefined;
+    urgency: string | number;
+    class: string;
+    contentCreated: string;
+    providerid: string;
+    lang: string;
+    genreid: string | undefined;
+    wordCount: string | number | undefined;
+    guid: string;
+    abstract: string | undefined;
+    documentURL: string | undefined;
+    thumbnailURL: string | undefined;
+    thumbnail: string | undefined;
+}
+
+export interface WebPushNotication {
+    visitorID: string;
+    userName: string;
+    payload: WebPushNoticationData[];
+}

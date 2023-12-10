@@ -458,38 +458,60 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
     }
 
     private async collectSubscriptions(pushData: PostedPushNoticationData) {
-        return new Promise((resolve) => {
-            let all: Promise<Promise<SendResult>[]>[] = [];
+        const collect: Map<
+            string,
+            {
+                owner: string;
+                apiKeys: VapidKeys;
+                subscription: PushSubscription;
+                notifications: WebPushNoticationData[];
+            }
+        > = new Map();
 
-            for (const payload of pushData.payload) {
-                const datas: any = {};
-                const notif: any = payload;
+        for (const payload of pushData.payload) {
+            for (const subscription of payload.subscriptions) {
+                const subItem = await this.accessStorage.getSubscription(subscription.userID, subscription.name);
+                const datas: WebPushNoticationData = {
+                    name: subscription.name,
+                    uno: subscription.identifier,
+                    isFree: subscription.isFree,
+                    title: payload.title,
+                    text: payload.text,
+                    headline: payload.headline,
+                    urgency: payload.urgency,
+                    class: payload.class,
+                    contentCreated: payload.contentCreated,
+                    providerid: payload.providerid,
+                    lang: payload.lang,
+                    genreid: payload.genreid,
+                    wordCount: payload.wordCount,
+                    guid: payload.guid,
+                    abstract: payload.abstract,
+                    documentURL: subscription.documentUrl,
+                    thumbnailURL: subscription.thumbnailUrl,
+                    thumbnail: payload.thumbnail,
+                };
 
-                Object.keys(payload).forEach((key) => {
-                    if (key !== 'subscriptions') datas[key] = notif[key];
-                });
+                if (subItem != null) {
+                    const userPushKeys = await this.accessStorage.findPushKeyForIdentity(subscription.userID, subItem.visitorID);
 
-                for (const subscription of payload.subscriptions) {
-                    all = all.concat(this.sendNotificationToClient(datas, subscription));
+                    for (const userPushKey of userPushKeys) {
+                        if (!collect.has(userPushKey.visitorID)) {
+                            collect.set(userPushKey.visitorID, {
+                                owner: subscription.userID,
+                                apiKeys: userPushKey.apiKeys,
+                                subscription: userPushKey.subscription,
+                                notifications: [],
+                            });
+                        }
+
+                        collect.get(userPushKey.visitorID)?.notifications.push(datas);
+                    }
                 }
             }
+        }
 
-            Promise.allSettled(all).then((returnValues) => {
-                const all: Promise<SendResult>[] = [];
-
-                returnValues.forEach((value) => {
-                    if (value.status === 'fulfilled') {
-                        value.value.forEach((v) => {
-                            all.push(v);
-                        });
-                    }
-                });
-
-                Promise.allSettled(all).then((returnValues) => {
-                    resolve(returnValues);
-                });
-            });
-        });
+        return collect;
     }
 
     private async pushNotification(pushData: PostedPushNoticationData): Promise<APIGatewayProxyResult> {
@@ -497,8 +519,71 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
             console.log(pushData);
         }
 
-        this.collectSubscriptions(pushData).then(() => {
-            console.info(`done: ${JSON.stringify(pushData)}`);
+        interface NotificationSendResult {
+            owner: string;
+            visitorID: string;
+            success: boolean;
+            result: any;
+        }
+
+        this.collectSubscriptions(pushData).then((collect) => {
+            const sendResults: Promise<NotificationSendResult>[] = [];
+
+            collect.forEach((push, visitorID) => {
+                sendResults.push(
+                    new Promise<NotificationSendResult>((resolve, reject) => {
+                        // Send webpush
+                        const notication: WebPushNotication = {
+                            visitorID: visitorID,
+                            userName: push.owner,
+                            payload: push.notifications,
+                        };
+
+                        webpush
+                            .sendNotification(push.subscription, JSON.stringify(notication), {
+                                gcmAPIKey: process.env.AFPDECK_GCM_KEY,
+                                TTL: parseNumber(process.env.AFPDECK_NOTIFICATION_TTL, 3600),
+                                vapidDetails: {
+                                    subject: `${visitorID}@acme.com`,
+                                    ...push.apiKeys,
+                                },
+                            })
+                            .then((result) => {
+                                resolve({
+                                    visitorID: visitorID,
+                                    owner: push.owner,
+                                    success: result.statusCode < 300,
+                                    result: result,
+                                });
+                            })
+                            .catch((e) => {
+                                resolve({
+                                    visitorID: visitorID,
+                                    owner: push.owner,
+                                    success: false,
+                                    result: e,
+                                });
+                            });
+                    }),
+                );
+            });
+
+            Promise.allSettled(sendResults).then((results) => {
+                results.forEach((result) => {
+                    if (result.status === 'fulfilled') {
+                        if (result.value.success) {
+                            console.info(`Web push succesful for user: ${result.value.owner} target: ${result.value.visitorID}`);
+                        } else if (result.value.result.statusCode) {
+                            const send: SendResult = result.value.result;
+                            console.error(`Web push failed for user: ${result.value.owner} target: ${result.value.visitorID}, code: ${send.statusCode}, reason: ${send.body}`, send.body);
+                        } else {
+                            console.error(`Web push error for user: ${result.value.owner} target: ${result.value.visitorID}, reason: ${result.value.result}`);
+                        }
+                    } else {
+                        console.error(`Unexpected Web push error: ${result.reason}`);
+                    }
+                });
+            });
         });
 
         return OK;
