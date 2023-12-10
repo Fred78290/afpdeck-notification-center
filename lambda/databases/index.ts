@@ -113,11 +113,3 @@ export default async function database(
 
     return db.connect();
 }
-
-export function parseBoolean(value?: string, defaultValue: boolean = false) {
-    if (value) {
-        return value.toLowerCase() === 'true';
-    }
-
-    return defaultValue;
-}

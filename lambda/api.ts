@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import database, { parseBoolean } from './databases';
+import database from './databases';
+import { parseBoolean } from './utils';
 import { handleError, HttpError, AfpDeckNotificationCenterHandler } from './app';
 
 let handler: AfpDeckNotificationCenterHandler;

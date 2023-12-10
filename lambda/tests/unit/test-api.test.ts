@@ -1,7 +1,8 @@
 /* eslint-disable prettier/prettier */
 import { APIGatewayProxyEvent, APIGatewayProxyEventQueryStringParameters, APIGatewayProxyEventPathParameters } from 'aws-lambda';
 import { AfpDeckNotificationCenterHandler } from '../../app';
-import database, { ALL, parseBoolean } from '../../databases';
+import database, { ALL } from '../../databases';
+import { parseBoolean } from '../../utils';
 import { CommonResponse, RegisterSubscriptionsResponse, ListSubscriptionsResponse, DeleteSubscriptionsResponse, WebPushUserKeyResponse, UserPreferenceResponse } from '../../types';
 import { DynamoDB, DeleteTableCommandOutput, CreateTableCommandInput } from '@aws-sdk/client-dynamodb';
 import testSubscription from './testSubscription.json';
