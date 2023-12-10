@@ -78,6 +78,13 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
                     '--name=<name>'
                 ]
             },
+            list: {
+                description: 'List user preferences',
+                options: [
+                    '--username=<username>',
+                    '--password=<password>'
+                ]
+            },
             store: {
                 description: 'Store user preference',
                 options: [
@@ -157,6 +164,8 @@ function cliWebPush (command: string, argv: minimist.ParsedArgs) {
 function cliPreferences (command: string, argv: minimist.ParsedArgs) {
     switch (command) {
     case 'get':
+        break
+    case 'list':
         break
     case 'store':
         break
