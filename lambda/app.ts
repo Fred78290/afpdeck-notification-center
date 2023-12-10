@@ -5,7 +5,9 @@ import { APIGatewayRequestAuthorizerEvent, Context, APIGatewayAuthorizerResult, 
 import { Subscription, AuthType, ServiceType, RegisterService, PostedPushNoticationData, NoticationData, NoticationUserPayload } from 'afp-apicore-sdk/dist/types';
 import { ApiCoreNotificationCenter } from 'afp-apicore-sdk/dist//apicore/notification';
 import webpush, { VapidKeys, PushSubscription, SendResult } from 'web-push';
-import { ALL, AccessStorage, parseBoolean } from './databases';
+import { ALL, AccessStorage } from './databases';
+import { parseBoolean, parseNumber } from './utils';
+import { WebPushNotication, WebPushNoticationData } from './types';
 import { parse } from 'auth-header';
 import { base64decode } from 'nodejs-base64';
 import { randomUUID } from 'crypto';
@@ -328,18 +330,18 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         return notificationCenter;
     }
 
-    private async listSubscriptions(identity: Identify, browserID: string): Promise<APIGatewayProxyResult> {
+    private async listSubscriptions(identity: Identify, visitorID: string): Promise<APIGatewayProxyResult> {
         const notificationCenter = this.getNotificationCenter(identity);
         let subscriptions = await notificationCenter.listSubscriptions();
 
-        if (browserID !== ALL && subscriptions) {
+        if (visitorID !== ALL && subscriptions) {
             const alls = await Promise.all(
                 subscriptions.map(async (subscription) => {
                     return new Promise<boolean>((resolve, reject) => {
                         this.accessStorage
                             .getSubscription(identity.principalId, subscription.name)
                             .then((found) => {
-                                resolve(found ? found.browserID.includes(browserID) : false);
+                                resolve(found ? found.visitorID.includes(visitorID) : false);
                             })
                             .catch((e) => {
                                 resolve(false);
@@ -389,14 +391,14 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         }
     }
 
-    private async registerNotification(identifier: string, notification: Subscription, identity: Identify, serviceDefinition: ServiceDefinition, browserID: string): Promise<APIGatewayProxyResult> {
+    private async registerNotification(identifier: string, notification: Subscription, identity: Identify, serviceDefinition: ServiceDefinition, visitorID: string): Promise<APIGatewayProxyResult> {
         const now = new Date();
         const notificationCenter = await this.checkIfServiceIsRegistered(identity, serviceDefinition);
         const notificationIdentifier = await this.addSubscriptionIfNotExists(notificationCenter, identifier, notification, serviceDefinition);
 
         await this.accessStorage.storeSubscription({
             uno: notificationIdentifier,
-            browserID: [browserID],
+            visitorID: [visitorID],
             name: identifier,
             owner: identity.principalId,
             subscription: notification,
@@ -424,7 +426,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
 
         if (subItem != null) {
             try {
-                const userPushKey = await this.accessStorage.findPushKeyForIdentity(subscription.userID, subItem.browserID);
+                const userPushKey = await this.accessStorage.findPushKeyForIdentity(subscription.userID, subItem.visitorID);
 
                 if (userPushKey.length > 0) {
                     const datas = {
@@ -439,7 +441,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                     userPushKey.forEach((m) => {
                         const push = webpush.sendNotification(m.subscription, JSON.stringify(datas), {
                             vapidDetails: {
-                                subject: m.browserID,
+                                subject: m.visitorID,
                                 ...m.apiKeys,
                             },
                         });
@@ -448,7 +450,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                     });
                 }
             } catch (e) {
-                console.error('Browser registration: %s not found for user: %s, reason: %s', subItem.browserID, subscription.userID, e);
+                console.error('Browser registration: %s not found for user: %s, reason: %s', subItem.visitorID, subscription.userID, e);
             }
         }
 
@@ -456,38 +458,60 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
     }
 
     private async collectSubscriptions(pushData: PostedPushNoticationData) {
-        return new Promise((resolve) => {
-            let all: Promise<Promise<SendResult>[]>[] = [];
+        const collect: Map<
+            string,
+            {
+                owner: string;
+                apiKeys: VapidKeys;
+                subscription: PushSubscription;
+                notifications: WebPushNoticationData[];
+            }
+        > = new Map();
 
-            for (const payload of pushData.payload) {
-                const datas: any = {};
-                const notif: any = payload;
+        for (const payload of pushData.payload) {
+            for (const subscription of payload.subscriptions) {
+                const subItem = await this.accessStorage.getSubscription(subscription.userID, subscription.name);
+                const datas: WebPushNoticationData = {
+                    name: subscription.name,
+                    uno: subscription.identifier,
+                    isFree: subscription.isFree,
+                    title: payload.title,
+                    text: payload.text,
+                    headline: payload.headline,
+                    urgency: payload.urgency,
+                    class: payload.class,
+                    contentCreated: payload.contentCreated,
+                    providerid: payload.providerid,
+                    lang: payload.lang,
+                    genreid: payload.genreid,
+                    wordCount: payload.wordCount,
+                    guid: payload.guid,
+                    abstract: payload.abstract,
+                    documentURL: subscription.documentUrl,
+                    thumbnailURL: subscription.thumbnailUrl,
+                    thumbnail: payload.thumbnail,
+                };
 
-                Object.keys(payload).forEach((key) => {
-                    if (key !== 'subscriptions') datas[key] = notif[key];
-                });
+                if (subItem != null) {
+                    const userPushKeys = await this.accessStorage.findPushKeyForIdentity(subscription.userID, subItem.visitorID);
 
-                for (const subscription of payload.subscriptions) {
-                    all = all.concat(this.sendNotificationToClient(datas, subscription));
+                    for (const userPushKey of userPushKeys) {
+                        if (!collect.has(userPushKey.visitorID)) {
+                            collect.set(userPushKey.visitorID, {
+                                owner: subscription.userID,
+                                apiKeys: userPushKey.apiKeys,
+                                subscription: userPushKey.subscription,
+                                notifications: [],
+                            });
+                        }
+
+                        collect.get(userPushKey.visitorID)?.notifications.push(datas);
+                    }
                 }
             }
+        }
 
-            Promise.allSettled(all).then((returnValues) => {
-                const all: Promise<SendResult>[] = [];
-
-                returnValues.forEach((value) => {
-                    if (value.status === 'fulfilled') {
-                        value.value.forEach((v) => {
-                            all.push(v);
-                        });
-                    }
-                });
-
-                Promise.allSettled(all).then((returnValues) => {
-                    resolve(returnValues);
-                });
-            });
-        });
+        return collect;
     }
 
     private async pushNotification(pushData: PostedPushNoticationData): Promise<APIGatewayProxyResult> {
@@ -495,21 +519,84 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
             console.log(pushData);
         }
 
-        this.collectSubscriptions(pushData).then(() => {
-            console.info(`done: ${JSON.stringify(pushData)}`);
+        interface NotificationSendResult {
+            owner: string;
+            visitorID: string;
+            success: boolean;
+            result: any;
+        }
+
+        this.collectSubscriptions(pushData).then((collect) => {
+            const sendResults: Promise<NotificationSendResult>[] = [];
+
+            collect.forEach((push, visitorID) => {
+                sendResults.push(
+                    new Promise<NotificationSendResult>((resolve, reject) => {
+                        // Send webpush
+                        const notication: WebPushNotication = {
+                            visitorID: visitorID,
+                            userName: push.owner,
+                            payload: push.notifications,
+                        };
+
+                        webpush
+                            .sendNotification(push.subscription, JSON.stringify(notication), {
+                                gcmAPIKey: process.env.AFPDECK_GCM_KEY,
+                                TTL: parseNumber(process.env.AFPDECK_NOTIFICATION_TTL, 3600),
+                                vapidDetails: {
+                                    subject: `${visitorID}@acme.com`,
+                                    ...push.apiKeys,
+                                },
+                            })
+                            .then((result) => {
+                                resolve({
+                                    visitorID: visitorID,
+                                    owner: push.owner,
+                                    success: result.statusCode < 300,
+                                    result: result,
+                                });
+                            })
+                            .catch((e) => {
+                                resolve({
+                                    visitorID: visitorID,
+                                    owner: push.owner,
+                                    success: false,
+                                    result: e,
+                                });
+                            });
+                    }),
+                );
+            });
+
+            Promise.allSettled(sendResults).then((results) => {
+                results.forEach((result) => {
+                    if (result.status === 'fulfilled') {
+                        if (result.value.success) {
+                            console.info(`Web push succesful for user: ${result.value.owner} target: ${result.value.visitorID}`);
+                        } else if (result.value.result.statusCode) {
+                            const send: SendResult = result.value.result;
+                            console.error(`Web push failed for user: ${result.value.owner} target: ${result.value.visitorID}, code: ${send.statusCode}, reason: ${send.body}`, send.body);
+                        } else {
+                            console.error(`Web push error for user: ${result.value.owner} target: ${result.value.visitorID}, reason: ${result.value.result}`);
+                        }
+                    } else {
+                        console.error(`Unexpected Web push error: ${result.reason}`);
+                    }
+                });
+            });
         });
 
         return OK;
     }
 
-    private async deleteNotification(identifier: string, identity: Identify, browserID: string): Promise<APIGatewayProxyResult> {
+    private async deleteNotification(identifier: string, identity: Identify, visitorID: string): Promise<APIGatewayProxyResult> {
         const notificationCenter = this.getNotificationCenter(identity);
 
         try {
-            const result = await this.accessStorage.deleteSubscription(identity.principalId, identifier, browserID);
+            const result = await this.accessStorage.deleteSubscription(identity.principalId, identifier, visitorID);
 
             // Delete subscription in apicore if all or any browser remains
-            if (this.registerService && (browserID === ALL || result.remains.length === 0)) {
+            if (this.registerService && (visitorID === ALL || result.remains.length === 0)) {
                 await notificationCenter.deleteSubscription(identifier);
             }
 
@@ -567,12 +654,12 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         };
     }
 
-    private async storeWebPushUserKey(principalId: string, browserID: string, data: WebPushUser): Promise<APIGatewayProxyResult> {
+    private async storeWebPushUserKey(principalId: string, visitorID: string, data: WebPushUser): Promise<APIGatewayProxyResult> {
         const now = new Date();
 
         await this.accessStorage.storeWebPushUserDocument({
             owner: principalId,
-            browserID: browserID,
+            visitorID: visitorID,
             apiKeys: data.apiKeys,
             subscription: data.subscription,
             created: now,
@@ -582,13 +669,13 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         return OK;
     }
 
-    private async updateWebPushUserKey(principalId: string, browserID: string, data: WebPushUser): Promise<APIGatewayProxyResult> {
+    private async updateWebPushUserKey(principalId: string, visitorID: string, data: WebPushUser): Promise<APIGatewayProxyResult> {
         try {
             const now = new Date();
 
             await this.accessStorage.updateWebPushUserDocument({
                 owner: principalId,
-                browserID: browserID,
+                visitorID: visitorID,
                 apiKeys: data.apiKeys,
                 subscription: data.subscription,
                 created: now,
@@ -601,14 +688,14 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         }
     }
 
-    private async deleteWebPushUserKey(principalId: string, browserID: string): Promise<APIGatewayProxyResult> {
-        await this.accessStorage.deleteWebPushUserDocument(principalId, browserID);
+    private async deleteWebPushUserKey(principalId: string, visitorID: string): Promise<APIGatewayProxyResult> {
+        await this.accessStorage.deleteWebPushUserDocument(principalId, visitorID);
 
         return OK;
     }
 
-    private async getWebPushUserKey(principalId: string, browserID: string): Promise<APIGatewayProxyResult> {
-        const webPushKeys = await this.accessStorage.findPushKeyForIdentity(principalId, [browserID]);
+    private async getWebPushUserKey(principalId: string, visitorID: string): Promise<APIGatewayProxyResult> {
+        const webPushKeys = await this.accessStorage.findPushKeyForIdentity(principalId, [visitorID]);
 
         return {
             statusCode: 200,
@@ -726,7 +813,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                         throw new HttpError('Missing parameters to push subscription', 400);
                     }
                 } else {
-                    const browserID = event.queryStringParameters?.browserID ?? ALL;
+                    const visitorID = event.queryStringParameters?.visitorID ?? ALL;
                     const identity = {
                         principalId: authorizer?.principalId,
                         accessToken: authorizer?.accessToken,
@@ -740,27 +827,27 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                         if (method === 'POST' || method === 'PUT') {
                             if (event.body) {
                                 if (method === 'POST') {
-                                    response = this.storeWebPushUserKey(identity.principalId, browserID, JSON.parse(event.body));
+                                    response = this.storeWebPushUserKey(identity.principalId, visitorID, JSON.parse(event.body));
                                 } else {
-                                    response = this.updateWebPushUserKey(identity.principalId, browserID, JSON.parse(event.body));
+                                    response = this.updateWebPushUserKey(identity.principalId, visitorID, JSON.parse(event.body));
                                 }
                             } else {
                                 throw new HttpError('Missing parameters to register webpush user key', 400);
                             }
                         } else if (method === 'GET') {
-                            response = this.getWebPushUserKey(identity.principalId, browserID);
+                            response = this.getWebPushUserKey(identity.principalId, visitorID);
                         } else if (method === 'DELETE') {
-                            response = this.deleteWebPushUserKey(identity.principalId, browserID);
+                            response = this.deleteWebPushUserKey(identity.principalId, visitorID);
                         } else {
                             throw new HttpError('Method Not Allowed', 406);
                         }
                     } else if (event.resource.startsWith('/notification')) {
                         // Notification API
                         if (method === 'GET') {
-                            response = this.listSubscriptions(identity, browserID);
+                            response = this.listSubscriptions(identity, visitorID);
                         } else if (method === 'DELETE') {
                             if (event.pathParameters?.identifier) {
-                                response = this.deleteNotification(event.pathParameters?.identifier, identity, browserID);
+                                response = this.deleteNotification(event.pathParameters?.identifier, identity, visitorID);
                             } else {
                                 throw new HttpError('Missing parameters to delete subscription', 400);
                             }
@@ -771,7 +858,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                                     JSON.parse(event.body),
                                     identity,
                                     this.getServiceDefinition(event.queryStringParameters),
-                                    browserID,
+                                    visitorID,
                                 );
                             } else {
                                 throw new HttpError('Missing parameters to register subscription', 400);

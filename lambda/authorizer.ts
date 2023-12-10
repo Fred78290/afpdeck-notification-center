@@ -1,6 +1,6 @@
 import { APIGatewayRequestAuthorizerEvent, Context, APIGatewayAuthorizerResult } from 'aws-lambda';
 import { Authorizer } from './app';
-import { parseBoolean } from './databases/index';
+import { parseBoolean } from './utils';
 
 let handler: Authorizer;
 

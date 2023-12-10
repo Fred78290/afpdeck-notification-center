@@ -5,10 +5,9 @@ import { ApiCoreDocument, NoticationData, PostedPushNoticationData } from 'afp-a
 import { ServerApp, AppOptions, createApp } from '../../src/server'
 import { SubscriptionDocument } from '../../lambda/databases'
 import { Request, Response, NextFunction } from 'express'
-import * as http from 'http'
 import * as dotenv from 'dotenv'
 import { randomUUID } from 'crypto'
-import fetch, { Headers } from 'cross-fetch'
+import fetch from 'cross-fetch'
 
 dotenv.config({ path: __dirname + '/../.env' })
 

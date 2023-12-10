@@ -18,7 +18,7 @@ const userPreferencesTable = defineTable(
 const webPushUserTable = defineTable(
     {
         owner: 'string',
-        browserID: 'string',
+        visitorID: 'string',
         publicKey: 'string',
         privateKey: 'string',
         endpoint: 'string',
@@ -28,10 +28,10 @@ const webPushUserTable = defineTable(
         updated: 'number',
     },
     'owner',
-    'browserID',
+    'visitorID',
     {
-        'browserID-index': {
-            partitionKey: 'browserID',
+        'visitorID-index': {
+            partitionKey: 'visitorID',
             sortKey: 'created',
         },
     },
@@ -42,7 +42,7 @@ const subscriptionsTable = defineTable(
         owner: 'string',
         name: 'string',
         uno: 'string',
-        browserID: 'string set',
+        visitorID: 'string set',
         subscription: 'string',
         created: 'number',
         updated: 'number',
@@ -137,6 +137,8 @@ export class DynamoDBAccessStorage implements AccessStorage {
                             updated: new Date(item.updated),
                         });
                     });
+
+                    resolve(prefs);
                 })
                 .catch((e) => {
                     reject(e);
@@ -214,7 +216,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public findPushKeyForIdentity(principalId: string, browserID: string[]): Promise<WebPushUserDocument[]> {
+    public findPushKeyForIdentity(principalId: string, visitorID: string[]): Promise<WebPushUserDocument[]> {
         return new Promise<WebPushUserDocument[]>((resolve, reject) => {
             this.webPushUserTableClient
                 .queryAll({ owner: principalId })
@@ -222,10 +224,10 @@ export class DynamoDBAccessStorage implements AccessStorage {
                     const docs: WebPushUserDocument[] = [];
 
                     result.member.forEach((item) => {
-                        if (browserID.includes(ALL) || browserID.includes(item.browserID)) {
+                        if (visitorID.includes(ALL) || visitorID.includes(item.visitorID)) {
                             docs.push({
                                 owner: item.owner,
-                                browserID: item.browserID,
+                                visitorID: item.visitorID,
                                 created: new Date(item.created),
                                 updated: new Date(item.updated),
                                 apiKeys: {
@@ -256,7 +258,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
             this.webPushUserTableClient
                 .put({
                     owner: document.owner,
-                    browserID: document.browserID,
+                    visitorID: document.visitorID,
                     publicKey: document.apiKeys.publicKey,
                     privateKey: document.apiKeys.privateKey,
                     endpoint: document.subscription.endpoint,
@@ -280,7 +282,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
                 .update({
                     key: {
                         owner: document.owner,
-                        browserID: document.browserID,
+                        visitorID: document.visitorID,
                     },
                     updates: {
                         publicKey: document.apiKeys.publicKey,
@@ -300,20 +302,20 @@ export class DynamoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public deleteWebPushUserDocument(principalId: string, browserID: string): Promise<void> {
+    public deleteWebPushUserDocument(principalId: string, visitorID: string): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            if (browserID === ALL) {
+            if (visitorID === ALL) {
                 this.webPushUserTableClient
                     .queryAll({
                         owner: principalId,
                     })
                     .then((results) => {
-                        const keys: { owner: string; browserID: string }[] = [];
+                        const keys: { owner: string; visitorID: string }[] = [];
 
                         results.member.forEach((doc) => {
                             keys.push({
                                 owner: doc.owner,
-                                browserID: doc.browserID,
+                                visitorID: doc.visitorID,
                             });
                         });
 
@@ -334,7 +336,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
                 this.webPushUserTableClient
                     .delete({
                         owner: principalId,
-                        browserID: browserID,
+                        visitorID: visitorID,
                     })
                     .then((result) => {
                         resolve();
@@ -359,7 +361,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
                         docs.push({
                             name: item.name,
                             owner: item.owner,
-                            browserID: Array.from(item.browserID.values()),
+                            visitorID: Array.from(item.visitorID.values()),
                             uno: item.uno,
                             created: new Date(item.created),
                             updated: new Date(item.updated),
@@ -389,7 +391,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
                         resolve({
                             owner: item.owner,
                             name: item.name,
-                            browserID: Array.from(item.browserID.values()),
+                            visitorID: Array.from(item.visitorID.values()),
                             subscription: JSON.parse(item.subscription),
                             uno: item.uno,
                             created: new Date(item.created),
@@ -415,11 +417,11 @@ export class DynamoDBAccessStorage implements AccessStorage {
                 .then((result) => {
                     if (result.item) {
                         const item = result.item;
-                        const browserID = item.browserID;
+                        const visitorID = item.visitorID;
 
-                        subscription.browserID.forEach((item) => {
-                            if (!browserID.has(item)) {
-                                browserID.add(item);
+                        subscription.visitorID.forEach((item) => {
+                            if (!visitorID.has(item)) {
+                                visitorID.add(item);
                             }
                         });
 
@@ -432,7 +434,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
                                 updates: {
                                     uno: subscription.uno,
                                     subscription: JSON.stringify(subscription.subscription),
-                                    browserID: browserID,
+                                    visitorID: visitorID,
                                     updated: Date.now(),
                                 },
                             })
@@ -451,7 +453,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
                                     owner: subscription.owner,
                                     uno: subscription.uno,
                                     name: subscription.name,
-                                    browserID: new Set<string>(subscription.browserID),
+                                    visitorID: new Set<string>(subscription.visitorID),
                                     subscription: JSON.stringify(subscription.subscription),
                                     created: now,
                                     updated: now,
@@ -474,9 +476,9 @@ export class DynamoDBAccessStorage implements AccessStorage {
         });
     }
 
-    public deleteSubscription(owner: string, name: string, browserID: string): Promise<DeletedSubscriptionRemainder> {
+    public deleteSubscription(owner: string, name: string, visitorID: string): Promise<DeletedSubscriptionRemainder> {
         return new Promise<DeletedSubscriptionRemainder>((resolve, reject) => {
-            if (browserID === ALL) {
+            if (visitorID === ALL) {
                 this.subscriptionTableClient
                     .delete({
                         name: name,
@@ -500,12 +502,12 @@ export class DynamoDBAccessStorage implements AccessStorage {
                     .then((result) => {
                         if (result.item) {
                             const item = result.item;
-                            const browserIDs = item.browserID;
+                            const visitorIDs = item.visitorID;
 
-                            if (browserIDs.has(browserID)) {
-                                browserIDs.delete(browserID);
+                            if (visitorIDs.has(visitorID)) {
+                                visitorIDs.delete(visitorID);
 
-                                if (browserIDs.size > 0) {
+                                if (visitorIDs.size > 0) {
                                     this.subscriptionTableClient
                                         .update({
                                             key: {
@@ -513,14 +515,14 @@ export class DynamoDBAccessStorage implements AccessStorage {
                                                 owner: owner,
                                             },
                                             updates: {
-                                                browserID: browserIDs,
+                                                visitorID: visitorIDs,
                                                 updated: Date.now(),
                                             },
                                         })
                                         .then((result) => {
                                             resolve({
                                                 identifier: item.uno,
-                                                remains: Array.from(browserIDs.values()),
+                                                remains: Array.from(visitorIDs.values()),
                                             });
                                         })
                                         .catch((e) => {
@@ -545,7 +547,7 @@ export class DynamoDBAccessStorage implements AccessStorage {
                             } else {
                                 resolve({
                                     identifier: item.uno,
-                                    remains: Array.from(browserIDs.values()),
+                                    remains: Array.from(visitorIDs.values()),
                                 });
                             }
                         } else {

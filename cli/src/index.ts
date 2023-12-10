@@ -43,7 +43,7 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
                 options: [
                     '--username=<username>',
                     '--password=<password>',
-                    '--browser-identifier=<browser-id>'
+                    '--visitor-id=<browser-id>'
                 ]
             },
             store: {
@@ -51,14 +51,12 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
                 options: [
                     '--username=<username>',
                     '--password=<password>',
-                    '--browser-identifier=<browser-id>',
+                    '--visitor-id=<browser-id>',
                     '--endpoint=<url>',
                     '--key=<browser key>]',
                     '--auth=<auth secret>',
-                    '--vapid-subject=<vapid subject>',
-                    '--vapid-pubkey=<public key url base64>',
-                    '--vapid-pvtkey=<private key url base64>',
-                    '--gcm-api-key=<api key>'
+                    '--vapid-publict-key=<public key url base64>',
+                    '--vapid-private-key=<private key url base64>'
                 ]
             },
             delete: {
@@ -66,7 +64,7 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
                 options: [
                     '--username=<username>',
                     '--password=<password>',
-                    '--browser-identifier=<browser-id>'
+                    '--visitor-id=<browser-id>'
                 ]
             }
         },
@@ -78,6 +76,13 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
                     '--username=<username>',
                     '--password=<password>',
                     '--name=<name>'
+                ]
+            },
+            list: {
+                description: 'List user preferences',
+                options: [
+                    '--username=<username>',
+                    '--password=<password>'
                 ]
             },
             store: {
@@ -159,6 +164,8 @@ function cliWebPush (command: string, argv: minimist.ParsedArgs) {
 function cliPreferences (command: string, argv: minimist.ParsedArgs) {
     switch (command) {
     case 'get':
+        break
+    case 'list':
         break
     case 'store':
         break

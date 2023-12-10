@@ -1,5 +1,5 @@
 import { createApp } from './server';
-import { parseBoolean } from '../lambda/databases/index';
+import { parseBoolean } from '../lambda/utils';
 import * as dotenv from "dotenv";
 
 dotenv.config();

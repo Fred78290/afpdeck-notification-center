@@ -8,7 +8,7 @@ export const ALL = 'all';
 
 export const DEFAULT_WEBPUSH_TABLENAME = 'afpdeck-webpush';
 export const DEFAULT_SUBSCRIPTIONS_TABLENAME = 'afpdeck-subscriptions';
-export const DEFAULT_BROWSERID_TABLENAME = 'afpdeck-browserid';
+export const DEFAULT_VISITORID_TABLENAME = 'afpdeck-visitor-id';
 export const DEFAULT_USERPREFS_TABLENAME = 'afpdeck-preferences';
 export const ERROR_RESOURCE_NOTFOUND = 'Requested resource not found';
 export const ERROR_DATABASE_NOTCONNECTED = 'Database not connected';
@@ -42,7 +42,7 @@ export interface SubscriptionDocument {
     owner: string;
     name: string;
     uno: string;
-    browserID: string[];
+    visitorID: string[];
     subscription: Subscription;
     created: Date;
     updated: Date;
@@ -50,7 +50,7 @@ export interface SubscriptionDocument {
 
 export interface WebPushUserDocument {
     owner: string;
-    browserID: string;
+    visitorID: string;
     apiKeys: VapidKeys;
     subscription: PushSubscription;
     created: Date;
@@ -71,15 +71,15 @@ export interface AccessStorage {
     getUserPreferences(principalId: string): Promise<UserPreferencesDocument[] | null>;
     deleteUserPreferences(principalId: string, name: string): Promise<void>;
 
-    findPushKeyForIdentity(principalId: string, browserID: string[]): Promise<WebPushUserDocument[]>;
+    findPushKeyForIdentity(principalId: string, visitorID: string[]): Promise<WebPushUserDocument[]>;
     storeWebPushUserDocument(document: WebPushUserDocument): Promise<void>;
     updateWebPushUserDocument(document: WebPushUserDocument): Promise<void>;
-    deleteWebPushUserDocument(principalId: string, browserID: string): Promise<void>;
+    deleteWebPushUserDocument(principalId: string, visitorID: string): Promise<void>;
 
     getSubscriptions(owner: string): Promise<SubscriptionDocument[]>;
     getSubscription(owner: string, name: string): Promise<SubscriptionDocument | null>;
     storeSubscription(subscription: SubscriptionDocument): Promise<void>;
-    deleteSubscription(owner: string, name: string, browserID: string): Promise<DeletedSubscriptionRemainder>;
+    deleteSubscription(owner: string, name: string, visitorID: string): Promise<DeletedSubscriptionRemainder>;
 }
 
 export default async function database(
@@ -112,12 +112,4 @@ export default async function database(
     }
 
     return db.connect();
-}
-
-export function parseBoolean(value?: string, defaultValue: boolean = false) {
-    if (value) {
-        return value.toLowerCase() === 'true';
-    }
-
-    return defaultValue;
 }
