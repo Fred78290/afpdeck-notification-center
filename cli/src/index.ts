@@ -55,10 +55,8 @@ function usage (exitCode: number = 0, action?: string, command?: string) {
                     '--endpoint=<url>',
                     '--key=<browser key>]',
                     '--auth=<auth secret>',
-                    '--vapid-subject=<vapid subject>',
-                    '--vapid-pubkey=<public key url base64>',
-                    '--vapid-pvtkey=<private key url base64>',
-                    '--gcm-api-key=<api key>'
+                    '--vapid-publict-key=<public key url base64>',
+                    '--vapid-private-key=<private key url base64>'
                 ]
             },
             delete: {
