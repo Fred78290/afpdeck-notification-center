@@ -137,6 +137,8 @@ export class DynamoDBAccessStorage implements AccessStorage {
                             updated: new Date(item.updated),
                         });
                     });
+
+                    resolve(prefs);
                 })
                 .catch((e) => {
                     reject(e);
