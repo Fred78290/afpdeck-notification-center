@@ -39,8 +39,8 @@ export default function usage (exitCode: number = 0, action?: string, command?: 
             '--afpdeck-notification-url=<afpdeck notification url> | $AFPDECK_NOTIFICATION_URL | https://afpdeck-notification-center.aldunelabs.fr',
             '--client-id=<client id> | $APICORE_CLIENT_ID',
             '--client-secret=<client secret> | $APICORE_CLIENT_SECRET',
-            '--username=<username>',
-            '--password=<password>'
+            '--username=<username> | $APICORE_USERNAME',
+            '--password=<password> | $APICORE_PASSWORD'
         ],
         webpush: {
             description: 'manage web-push keys',

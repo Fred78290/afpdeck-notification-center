@@ -33,6 +33,41 @@ export default class AfpDeckNotificationCenterCli extends AfpDeckNotificationCen
         return this.opts[key] ?? missing(key)
     }
 
+    public async authorize () {
+        return this.authenticate({
+            username: this.username(),
+            password: this.password()
+        })
+    }
+
+    private username () {
+        const key = 'username'
+
+        if (this.opts[key]) {
+            return this.opts[key]
+        }
+
+        if (process.env.APICORE_USERNAME) {
+            return process.env.APICORE_USERNAME
+        }
+
+        missing(key)
+    }
+
+    private password () {
+        const key = 'password'
+
+        if (this.opts[key]) {
+            return this.opts[key]
+        }
+
+        if (process.env.APICORE_PASSWORD) {
+            return process.env.APICORE_USERNAME
+        }
+
+        missing(key)
+    }
+
     public async run (action: string, command: string) {
         switch (action) {
         case 'webpush':
@@ -94,9 +129,9 @@ export default class AfpDeckNotificationCenterCli extends AfpDeckNotificationCen
         case 'list':
             return this.listSubscriptions(this.opts['visitor-id'])
         case 'store':
-            break
+            return this.registerSubscription(this.mandatory('name'), this.mandatory('service'), loadData(this.mandatory('data')), undefined, this.opts['visitor-id'])
         case 'delete':
-            break
+            return this.deleteSubscription(this.mandatory('name'), this.opts['visitor-id'])
         default:
             usage(1, 'subscription')
         }

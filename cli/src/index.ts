@@ -16,8 +16,6 @@ async function createNotificationCenter (argv: minimist.ParsedArgs) {
         }
     })
 
-    await afpdeck.authenticate({username: argv['username'] ?? missing('username'), password: argv['password'] ?? missing('password')})
-
     return afpdeck
 }
 
@@ -28,8 +26,14 @@ const options = minimist(argv)
 
 if (action && command) {
     createNotificationCenter(options).then((afpdeck) => {
-        afpdeck.run(action, command).then(() => {
-            process.exit(0)
+        afpdeck.authorize().then(() => {
+            afpdeck.run(action, command).then((result) => {
+                console.log(JSON.stringify(result, null, 4))
+                process.exit(0)
+            }).catch((e) => {
+                console.error(e)
+                process.exit(1)
+            })
         }).catch((e) => {
             console.error(e)
             process.exit(1)
