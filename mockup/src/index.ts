@@ -216,6 +216,11 @@ async function mockupPush (
         const subscriptions: SubscriptionDocument[] = await serverApp.handler.storage.getSubscriptions(userName)
         const notications: NoticationData[] = []
 
+        await apicore.authenticate({
+            username: process.env.APICORE_USERNAME,
+            password: process.env.APICORE_PASSWORD
+        })
+
         for (const element of subscriptions) {
             const subscription = element
             const results = await apicore.execute({
