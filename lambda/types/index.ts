@@ -52,7 +52,17 @@ export interface DeleteSubscriptionsResponse extends CommonResponse {
 
 export interface ListSubscriptionsResponse extends CommonResponse {
     response: {
-        subscriptions: RegisteredSubscription[] | undefined;
+        subscriptions: RegisteredSubscription[] | undefined | null;
+        status: {
+            code: number;
+            reason: string;
+        };
+    };
+}
+
+export interface GetSubscriptionResponse extends CommonResponse {
+    response: {
+        subscription: RegisteredSubscription | undefined | null;
         status: {
             code: number;
             reason: string;
@@ -62,7 +72,7 @@ export interface ListSubscriptionsResponse extends CommonResponse {
 
 export interface WebPushUserKeyResponse extends CommonResponse {
     response: {
-        keys: WebPushUserDocument[] | undefined;
+        keys: WebPushUserDocument[] | undefined | null;
         status: {
             code: number;
             reason: string;

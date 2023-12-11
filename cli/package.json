@@ -11,6 +11,7 @@
 		"clean": "rm -rf dist .rts2_cache_*",
 		"build": "tsc",
 		"lint": "eslint 'src/**/*.ts'",
+		"compile": "tsc --outDir build",
 		"prepare": "npm run clean && npm run lint && npm run build"
 	},
 	"repository": {
@@ -63,6 +64,7 @@
 	},
 	"dependencies": {
 		"@fred78290/afpdeck-notification-center": "file://../sdk",
+		"afp-apicore-sdk": "^1.1.12",
 		"minimist": "^1.2.8"
 	},
 	"lib": [

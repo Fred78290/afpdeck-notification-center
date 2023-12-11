@@ -1,215 +1,43 @@
 import minimist from 'minimist'
+import { Token } from 'afp-apicore-sdk/dist/types'
+import usage from './usage'
+import Client from './cli'
+import missing from './missing'
 
-interface UsageInfo {
-    [arg: string]: UsageInfo | string | string[] | undefined
-    name?: string
-    description: string
-    options?: string[]
-}
-
-function describeCommand (name: string, usage: UsageInfo, level: number = 0) {
-    const filler = level > 0 ? ' '.repeat(level * 2) : ''
-    const indent = filler + '    '
-    let result = filler + '# - ' + usage.description + '\n' + filler + name + indent + '\n'
-
-    if (usage.options) {
-        usage.options.forEach(options => {
-            result += filler + indent + options + '\n'
-        })
-    }
-
-    result += '\n'
-
-    Object.keys(usage).forEach((key) => {
-        const value = usage[key]
-
-        if (key !== 'description' && key !== 'options' && key !== 'name' && typeof value === 'object') {
-            result += describeCommand(key, value as UsageInfo, level + 1)
+async function createNotificationCenter (argv: minimist.ParsedArgs) {
+    const afpdeck = new Client({
+        opts: argv,
+        baseUrl: argv['apicore-url'] ?? process.env.APICORE_BASE_URL ?? 'https://afp-apicore-prod.afp.com',
+        clientId: argv['client-id-url'] ?? process.env.APICORE_CLIENT_ID ?? missing('client id'),
+        clientSecret: argv['client-secret'] ?? process.env.APICORE_CLIENT_SECRET ?? missing('client secret'),
+        notificationCenterUrl: argv['afpdeck-notification-url'] ?? process.env.AFPDECK_NOTIFICATION_URL ?? 'https://afpdeck-notification-center.aldunelabs.fr',
+        saveToken: (token: Token | null) => {
+            console.log(token)
         }
     })
 
-    return result
-}
+    await afpdeck.authenticate({username: argv['username'] ?? missing('username'), password: argv['password'] ?? missing('password')})
 
-function usage (exitCode: number = 0, action?: string, command?: string) {
-    let describe: UsageInfo
-
-    const infos: UsageInfo = {
-        description: 'action command [options]',
-        webpush: {
-            description: 'manage web-push keys',
-            get: {
-                description: 'Get web-push key',
-                options: [
-                    '--username=<username>',
-                    '--password=<password>',
-                    '--visitor-id=<browser-id>'
-                ]
-            },
-            store: {
-                description: 'Store web-push key',
-                options: [
-                    '--username=<username>',
-                    '--password=<password>',
-                    '--visitor-id=<browser-id>',
-                    '--endpoint=<url>',
-                    '--key=<browser key>]',
-                    '--auth=<auth secret>',
-                    '--vapid-publict-key=<public key url base64>',
-                    '--vapid-private-key=<private key url base64>'
-                ]
-            },
-            delete: {
-                description: 'Delete web-push key',
-                options: [
-                    '--username=<username>',
-                    '--password=<password>',
-                    '--visitor-id=<browser-id>'
-                ]
-            }
-        },
-        preferences: {
-            description: 'manage user preferences',
-            get: {
-                description: 'Get user preferences',
-                options: [
-                    '--username=<username>',
-                    '--password=<password>',
-                    '--name=<name>'
-                ]
-            },
-            list: {
-                description: 'List user preferences',
-                options: [
-                    '--username=<username>',
-                    '--password=<password>'
-                ]
-            },
-            store: {
-                description: 'Store user preference',
-                options: [
-                    '--username=<username>',
-                    '--password=<password>',
-                    '--name=<name>',
-                    '--data=<path to user pref>'
-                ]
-            },
-            delete: {
-                description: 'Delete user preference',
-                options: [
-                    '--username=<username>',
-                    '--password=<password>',
-                    '--name=<name>'
-                ]
-            }
-        },
-        subscription: {
-            description: 'manage subscriptions',
-            get: {
-                description: 'Get subscription',
-                options: [
-                    '--username=<username>',
-                    '--password=<password>',
-                    '--name=<name>'
-                ]
-            },
-            store: {
-                description: 'Store subscription',
-                options: [
-                    '--username=<username>',
-                    '--password=<password>',
-                    '--name=<name>',
-                    '--data=<path to json>'
-                ]
-            },
-            delete: {
-                description: 'Delete subscription',
-                options: [
-                    '--username=<username>',
-                    '--password=<password>',
-                    '--name=<name>'
-                ]
-            }
-        }
-    }
-
-    if (action) {
-        describe = infos[action] as UsageInfo
-
-        if (command) {
-            describe = describe[command] as UsageInfo
-        }
-    } else {
-        describe = infos
-    }
-
-    console.log(describeCommand(action ?? 'afpdeck-cli', describe, 0))
-
-    process.exit(exitCode)
-}
-
-function cliWebPush (command: string, argv: minimist.ParsedArgs) {
-    switch (command) {
-    case 'get':
-        break
-    case 'store':
-        break
-    case 'delete':
-        break
-    default:
-        usage(1, 'webpush')
-    }
-}
-
-function cliPreferences (command: string, argv: minimist.ParsedArgs) {
-    switch (command) {
-    case 'get':
-        break
-    case 'list':
-        break
-    case 'store':
-        break
-    case 'delete':
-        break
-    default:
-        usage(1, 'preferences')
-    }
-
-}
-
-function cliSubscription (command: string, argv: minimist.ParsedArgs) {
-    switch (command) {
-    case 'get':
-        break
-    case 'store':
-        break
-    case 'delete':
-        break
-    default:
-        usage(1, 'subscription')
-    }
+    return afpdeck
 }
 
 const argv = process.argv.slice(2)
 const action = argv.shift()
 const command = argv.shift()
-
-console.log('OK')
+const options = minimist(argv)
 
 if (action && command) {
-    switch (action) {
-    case 'webpush':
-        cliWebPush(command, minimist(argv))
-        break
-    case 'preferences':
-        cliPreferences(command, minimist(argv))
-        break
-    case 'subscription':
-        cliSubscription(command, minimist(argv))
-        break
-    default:
-        usage()
-    }
+    createNotificationCenter(options).then((afpdeck) => {
+        afpdeck.run(action, command).then(() => {
+            process.exit(0)
+        }).catch((e) => {
+            console.error(e)
+            process.exit(1)
+        })
+    }).catch((e) => {
+        console.error(e)
+        process.exit(1)
+    })
 } else {
     usage(1)
 }

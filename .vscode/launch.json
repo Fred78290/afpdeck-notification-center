@@ -15,29 +15,30 @@
       "outFiles": ["${workspaceFolder}/build/**/*.js"]
     },
     {
-		"type": "node",
-		"request": "launch",
-		"name": "Mockup",
-		"localRoot": "${workspaceFolder}/mockup",
-		"cwd": "${workspaceFolder}/mockup",
-		"skipFiles": ["<node_internals>/**"],
-		"envFile": "${workspaceFolder}/mockup/.env",
-		"program": "${workspaceFolder}/mockup/build/mockup/src/index.js",
-		"preLaunchTask": "tsc: build - mockup",
-		"outFiles": ["${workspaceFolder}/mockup/build/**/*.js"]
-	  },
-	  {
-		"type": "node",
-		"request": "launch",
-		"name": "Cli",
-		"localRoot": "${workspaceFolder}/cli",
-		"cwd": "${workspaceFolder}/cli",
-		"skipFiles": ["<node_internals>/**"],
-		"program": "${workspaceFolder}/cli/src/index.js",
-		"preLaunchTask": "tsc: build - mockup",
-		"outFiles": ["${workspaceFolder}/cli/build/**/*.js"]
-	  },
-	  {
+      "type": "node",
+      "request": "launch",
+      "name": "Mockup",
+      "localRoot": "${workspaceFolder}/mockup",
+      "cwd": "${workspaceFolder}/mockup",
+      "skipFiles": ["<node_internals>/**"],
+      "envFile": "${workspaceFolder}/mockup/.env",
+      "program": "${workspaceFolder}/mockup/build/mockup/src/index.js",
+      "preLaunchTask": "tsc: build - mockup",
+      "outFiles": ["${workspaceFolder}/mockup/build/**/*.js"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Cli",
+      "localRoot": "${workspaceFolder}/cli",
+      "cwd": "${workspaceFolder}/cli",
+      "envFile": "${workspaceFolder}/cli/.env",
+      "skipFiles": ["<node_internals>/**"],
+      "program": "${workspaceFolder}/cli/build/index.js",
+      "preLaunchTask": "tsc: build - mockup",
+      "outFiles": ["${workspaceFolder}/cli/build/**/*.js"]
+    },
+    {
       "name": "Debug Jest Tests",
       "type": "node",
       "request": "launch",

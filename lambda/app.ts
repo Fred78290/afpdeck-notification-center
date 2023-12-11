@@ -3,7 +3,7 @@ import ApiCore from 'afp-apicore-sdk';
 
 import { APIGatewayRequestAuthorizerEvent, Context, APIGatewayAuthorizerResult, APIGatewayProxyEvent, APIGatewayProxyEventQueryStringParameters, APIGatewayProxyResult } from 'aws-lambda';
 import { Subscription, AuthType, ServiceType, RegisterService, PostedPushNoticationData, NoticationData, NoticationUserPayload } from 'afp-apicore-sdk/dist/types';
-import { ApiCoreNotificationCenter } from 'afp-apicore-sdk/dist//apicore/notification';
+import { ApiCoreNotificationCenter } from 'afp-apicore-sdk/dist/apicore/notification';
 import webpush, { VapidKeys, PushSubscription, SendResult } from 'web-push';
 import { ALL, AccessStorage } from './databases';
 import { parseBoolean, parseNumber } from './utils';
@@ -367,6 +367,35 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         };
     }
 
+    private async getSubscription(identifier: string, identity: Identify, visitorID: string): Promise<APIGatewayProxyResult> {
+        const notificationCenter = this.getNotificationCenter(identity);
+
+        if (visitorID !== ALL) {
+            const found = await this.accessStorage.getSubscription(identity.principalId, identifier);
+
+            if (found) {
+                if (!found.visitorID.includes(visitorID)) {
+                    return OK;
+                }
+            } else {
+                return NOT_FOUND;
+            }
+        }
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                response: {
+                    subscription: await notificationCenter.getSubscription(identifier),
+                    status: {
+                        code: 0,
+                        reason: 'OK',
+                    },
+                },
+            }),
+        };
+    }
+
     private async addSubscriptionIfNotExists(notificationCenter: ApiCoreNotificationCenter, identifier: string, notification: Subscription, serviceDefinition: ServiceDefinition): Promise<string> {
         if (this.registerService) {
             return new Promise<string>((resolve, reject) => {
@@ -391,7 +420,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         }
     }
 
-    private async registerNotification(identifier: string, notification: Subscription, identity: Identify, serviceDefinition: ServiceDefinition, visitorID: string): Promise<APIGatewayProxyResult> {
+    private async registerSubscription(identifier: string, notification: Subscription, identity: Identify, serviceDefinition: ServiceDefinition, visitorID: string): Promise<APIGatewayProxyResult> {
         const now = new Date();
         const notificationCenter = await this.checkIfServiceIsRegistered(identity, serviceDefinition);
         const notificationIdentifier = await this.addSubscriptionIfNotExists(notificationCenter, identifier, notification, serviceDefinition);
@@ -589,7 +618,7 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
         return OK;
     }
 
-    private async deleteNotification(identifier: string, identity: Identify, visitorID: string): Promise<APIGatewayProxyResult> {
+    private async deleteSubscription(identifier: string, identity: Identify, visitorID: string): Promise<APIGatewayProxyResult> {
         const notificationCenter = this.getNotificationCenter(identity);
 
         try {
@@ -841,19 +870,30 @@ export class AfpDeckNotificationCenterHandler extends Authorizer {
                         } else {
                             throw new HttpError('Method Not Allowed', 406);
                         }
-                    } else if (event.resource.startsWith('/notification')) {
+                    } else if (event.resource.startsWith('/subscriptions')) {
                         // Notification API
                         if (method === 'GET') {
                             response = this.listSubscriptions(identity, visitorID);
+                        } else {
+                            throw new HttpError('Method Not Allowed', 406);
+                        }
+                    } else if (event.resource.startsWith('/subscription')) {
+                        // Notification API
+                        if (method === 'GET') {
+                            if (event.pathParameters?.identifier) {
+                                response = this.getSubscription(event.pathParameters?.identifier, identity, visitorID);
+                            } else {
+                                throw new HttpError('Missing parameters to get subscription', 400);
+                            }
                         } else if (method === 'DELETE') {
                             if (event.pathParameters?.identifier) {
-                                response = this.deleteNotification(event.pathParameters?.identifier, identity, visitorID);
+                                response = this.deleteSubscription(event.pathParameters?.identifier, identity, visitorID);
                             } else {
                                 throw new HttpError('Missing parameters to delete subscription', 400);
                             }
                         } else if (method === 'POST') {
                             if (event.body && event.pathParameters?.identifier) {
-                                response = this.registerNotification(
+                                response = this.registerSubscription(
                                     event.pathParameters?.identifier,
                                     JSON.parse(event.body),
                                     identity,

@@ -446,19 +446,25 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref AfpDeckNotificationCenterApi
-            Path: /notification/{identifier}
+            Path: /subscription/{identifier}
             Method: POST
         DeleteNotification:
           Type: Api
           Properties:
             RestApiId: !Ref AfpDeckNotificationCenterApi
-            Path: /notification/{identifier}
+            Path: /subscription/{identifier}
             Method: DELETE
+        GetNotification:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AfpDeckNotificationCenterApi
+            Path: /subscription/{identifier}
+            Method: GET
         ListNotification:
           Type: Api
           Properties:
             RestApiId: !Ref AfpDeckNotificationCenterApi
-            Path: /notification
+            Path: /subscriptions
             Method: GET
         GetUserPreferences:
           Type: Api

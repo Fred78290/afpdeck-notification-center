@@ -1,7 +1,7 @@
 import ApiCore from 'afp-apicore-sdk'
 import { RegisteredSubscription, Subscription, ClientCredentials, Token } from 'afp-apicore-sdk/dist/types'
 import { WebPushUser, ServiceDefinition } from '../../../lambda/app'
-import { CommonResponse, UserPreferenceResponse, UserPreferencesResponse, RegisterSubscriptionsResponse, ListSubscriptionsResponse, DeleteSubscriptionsResponse, WebPushUserKeyResponse } from '../../../lambda/types'
+import { CommonResponse, UserPreferenceResponse, UserPreferencesResponse, RegisterSubscriptionsResponse, ListSubscriptionsResponse, GetSubscriptionResponse, DeleteSubscriptionsResponse, WebPushUserKeyResponse } from '../../../lambda/types'
 import { RequestParams, get, del, post, put } from '../utils/request'
 import fingerprint from '@fingerprintjs/fingerprintjs'
 
@@ -142,10 +142,10 @@ export default class AfpDeckNotificationCenter extends ApiCore {
      * @param visitorID Optional allow to override the visitor id
      * @returns The uno of the subscription
      */
-    public async registerNotification (name: string, service: string, notification: Subscription, serviceDefinition?: ServiceDefinition, visitorID?: string) {
+    public async registerSubscription (name: string, service: string, notification: Subscription, serviceDefinition?: ServiceDefinition, visitorID?: string) {
         await this.authenticate()
 
-        const data: RegisterSubscriptionsResponse = await post(`${this.notificationCenterUrl}/api/notification/${name}`, notification, {
+        const data: RegisterSubscriptionsResponse = await post(`${this.notificationCenterUrl}/api/subscription/${name}`, notification, {
             headers: this.authorizationBearerHeaders,
             params: this.buildParams(visitorID ?? await this.getVisitorID(), serviceDefinition)
         })
@@ -159,10 +159,10 @@ export default class AfpDeckNotificationCenter extends ApiCore {
      * @param visitorID Optional allow to override the visitor id
      * @returns The name of deleted subscription
      */
-    public async deleteNotification (name: string, visitorID?: string) {
+    public async deleteSubscription (name: string, visitorID?: string) {
         await this.authenticate()
 
-        const data: DeleteSubscriptionsResponse = await del(`${this.notificationCenterUrl}/api/notification/${name}`, {
+        const data: DeleteSubscriptionsResponse = await del(`${this.notificationCenterUrl}/api/subscription/${name}`, {
             headers: this.authorizationBearerHeaders,
             params: {
                 visitorID: visitorID ?? await this.getVisitorID()
@@ -172,15 +172,28 @@ export default class AfpDeckNotificationCenter extends ApiCore {
         return data.response
     }
 
+    public async getSubscription (name: string, visitorID?: string): Promise<RegisteredSubscription | undefined | null> {
+        await this.authenticate()
+
+        const data: GetSubscriptionResponse = await get(`${this.notificationCenterUrl}/api/subscription/${name}`, {
+            headers: this.authorizationBearerHeaders,
+            params: {
+                visitorID: visitorID ?? await this.getVisitorID()
+            }
+        })
+
+        return data.response.subscription
+    }
+
     /**
      * List all registered subscription from apicore notification center for the authenticated user
      * @param visitorID Optional allow to override the visitor id
      * @returns The list of registered subscription
      */
-    public async listSubscriptions (visitorID?: string): Promise<RegisteredSubscription[] | undefined> {
+    public async listSubscriptions (visitorID?: string): Promise<RegisteredSubscription[] | undefined | null> {
         await this.authenticate()
 
-        const data: ListSubscriptionsResponse = await get(`${this.notificationCenterUrl}/api/notification`, {
+        const data: ListSubscriptionsResponse = await get(`${this.notificationCenterUrl}/api/subscriptions`, {
             headers: this.authorizationBearerHeaders,
             params: {
                 visitorID: visitorID ?? await this.getVisitorID()

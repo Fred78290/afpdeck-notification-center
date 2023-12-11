@@ -231,9 +231,10 @@ export async function createApp(options: AppOptions): Promise<ServerApp> {
 				router.get("/webpush", handleRequest);
 				router.delete("/webpush", handleRequest);
 
-				router.post("/notification/:identifier", handleRequest);
-				router.delete("/notification/:identifier", handleRequest);
-				router.get("/notification", handleRequest);
+				router.get("/subscription/:identifier", handleRequest);
+				router.post("/subscription/:identifier", handleRequest);
+				router.delete("/subscription/:identifier", handleRequest);
+				router.get("/subscriptions", handleRequest);
 
 				router.post("/push", handleRequest);
 

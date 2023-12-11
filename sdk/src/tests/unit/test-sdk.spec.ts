@@ -145,12 +145,20 @@ describe('afpdeck-notification-center sdk', () => {
         expect(result.status.code).toBeGreaterThanOrEqual(0)
     }, DEFAULT_TIMEOUT)
 
-    it('verifies successful registerNotification', async () => {
-        console.log('verifies successful registerNotification')
-        const result = await afpdeck.registerNotification(subscriptionName, serviceName, testSubscription as Subscription, serviceDefinition)
+    it('verifies successful registerSubscription', async () => {
+        console.log('verifies successful registerSubscription')
+        const result = await afpdeck.registerSubscription(subscriptionName, serviceName, testSubscription as Subscription, serviceDefinition)
 
         expect(result).toBeDefined()
         expect(result.status.code).toBeGreaterThanOrEqual(0)
+    }, DEFAULT_TIMEOUT)
+
+    it('verifies successful get subscription', async () => {
+        console.log('verifies successful subscription')
+        const result = await afpdeck.getSubscription(subscriptionName)
+
+        expect(result).toBeDefined()
+        expect(result?.name).toEqual(subscriptionName)
     }, DEFAULT_TIMEOUT)
 
     it('verifies successful listSubscriptions', async () => {
@@ -161,9 +169,9 @@ describe('afpdeck-notification-center sdk', () => {
         expect(result?.map(n => n.name)).toContain(subscriptionName)
     }, DEFAULT_TIMEOUT)
 
-    it('verifies successful deleteNotification', async () => {
-        console.log('verifies successful deleteNotification')
-        const result = await afpdeck.deleteNotification(subscriptionName)
+    it('verifies successful deleteSubscription', async () => {
+        console.log('verifies successful deleteSubscription')
+        const result = await afpdeck.deleteSubscription(subscriptionName)
 
         expect(result).toBeDefined()
         expect(result.status.code).toBeGreaterThanOrEqual(0)
